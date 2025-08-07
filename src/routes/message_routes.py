@@ -981,6 +981,11 @@ async def process_chat_interaction_task(
                     0
                 ].message
 
+                # after chat completions is a pretty common spot to get a cancelled message
+                if redis.get(f"messages:{map_id}:cancelled"):
+                    redis.delete(f"messages:{map_id}:cancelled")
+                    break
+
                 # Store the assistant message in the database
                 await add_chat_completion_message(assistant_message)
 
