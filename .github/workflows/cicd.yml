@@ -3,6 +3,8 @@ name: CI/CD
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - 'docs/**'
 
 env:
   IMAGE_REPO: us-central1-docker.pkg.dev/mundi-459021/mundi-apps/mundi-public
