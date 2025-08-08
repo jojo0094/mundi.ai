@@ -93,8 +93,8 @@ export default function ProjectView() {
   });
 
   const { data: roomId } = useQuery({
-    queryKey: ['project', projectId, 'map', versionId, 'room'],
-    queryFn: () => fetch(`/api/maps/${versionId}/room`).then((res) => res.json() as Promise<{ room_id: string }>),
+    queryKey: ['project', projectId, 'room'],
+    queryFn: () => fetch(`/api/maps/${projectId}/room`).then((res) => res.json() as Promise<{ room_id: string }>),
     enabled: !!versionId,
   });
 
@@ -456,7 +456,7 @@ export default function ProjectView() {
     );
   }
 
-  if (!versionId) {
+  if (!project || !versionId || !roomId) {
     return (
       <div className="p-6">
         <h1 className="text-2xl font-bold mb-4">
@@ -486,58 +486,40 @@ export default function ProjectView() {
     );
   }
 
-  if (!mapData) {
-    return (
-      <div className="p-6">
-        <h1 className="text-2xl font-bold mb-4">Map Not Found</h1>
-        <p>The requested map could not be found.</p>
-        <a href="/maps" className="text-blue-500 hover:underline">
-          Back to Maps
-        </a>
-      </div>
-    );
-  }
-
   return (
     <div {...getRootProps()} className={`flex grow ${isDragActive ? 'file-drag-active' : ''}`}>
       {/* Dropzone */}
       <input {...getInputProps()} />
 
       {/* Interactive Map Section */}
-      {roomId && project ? (
-        <DriftDBProvider api="/drift/" room={roomId.room_id}>
-          <MapLibreMap
-            mapId={versionId}
-            height="100%"
-            project={project}
-            mapData={mapData}
-            mapTree={mapTree || null}
-            conversationId={conversationId}
-            conversations={conversations || []}
-            setConversationId={setConversationId}
-            readyState={readyState}
-            openDropzone={open}
-            uploadingFiles={uploadingFiles}
-            hiddenLayerIDs={hiddenLayerIDs}
-            toggleLayerVisibility={toggleLayerVisibility}
-            mapRef={mapRef}
-            activeActions={activeActions}
-            setActiveActions={setActiveActions}
-            zoomHistory={zoomHistory}
-            zoomHistoryIndex={zoomHistoryIndex}
-            setZoomHistoryIndex={setZoomHistoryIndex}
-            addError={addError}
-            dismissError={dismissError}
-            errors={errors}
-            invalidateProjectData={invalidateProjectData}
-            invalidateMapData={invalidateMapData}
-          />
-        </DriftDBProvider>
-      ) : (
-        <div className="flex items-center justify-center h-full">
-          <p>Loading room information...</p>
-        </div>
-      )}
+      <DriftDBProvider api="/drift/" room={roomId.room_id}>
+        <MapLibreMap
+          mapId={versionId}
+          height="100%"
+          project={project}
+          mapData={mapData}
+          mapTree={mapTree || null}
+          conversationId={conversationId}
+          conversations={conversations || []}
+          setConversationId={setConversationId}
+          readyState={readyState}
+          openDropzone={open}
+          uploadingFiles={uploadingFiles}
+          hiddenLayerIDs={hiddenLayerIDs}
+          toggleLayerVisibility={toggleLayerVisibility}
+          mapRef={mapRef}
+          activeActions={activeActions}
+          setActiveActions={setActiveActions}
+          zoomHistory={zoomHistory}
+          zoomHistoryIndex={zoomHistoryIndex}
+          setZoomHistoryIndex={setZoomHistoryIndex}
+          addError={addError}
+          dismissError={dismissError}
+          errors={errors}
+          invalidateProjectData={invalidateProjectData}
+          invalidateMapData={invalidateMapData}
+        />
+      </DriftDBProvider>
     </div>
   );
 }

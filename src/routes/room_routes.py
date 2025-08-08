@@ -14,13 +14,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
-import logging
 import httpx
 from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel
 from redis import Redis
-from src.dependencies.dag import get_map
-from src.database.models import MundiMap
+from src.dependencies.dag import get_project
+from src.database.models import MundiProject
 
 router = APIRouter()
 
@@ -30,8 +29,6 @@ redis = Redis(
     decode_responses=True,
 )
 
-logger = logging.getLogger(__name__)
-
 DRIFTDB_SERVER_URL = os.environ["DRIFTDB_SERVER_URL"]
 
 
@@ -39,11 +36,11 @@ class RoomResponse(BaseModel):
     room_id: str
 
 
-@router.get("/{map_id}/room", response_model=RoomResponse)
-async def get_map_room(
-    map: MundiMap = Depends(get_map),
+@router.get("/{project_id}/room", response_model=RoomResponse)
+async def get_project_room(
+    project: MundiProject = Depends(get_project),
 ):
-    redis_key = f"map:{map.id}:room_id"
+    redis_key = f"project:{project.id}:room_id"
     room_id = redis.get(redis_key)
 
     if room_id:
@@ -62,7 +59,7 @@ async def get_map_room(
         response = await client.post(f"{DRIFTDB_SERVER_URL}/new")
 
         if response.status_code != 200:
-            logger.error(f"Failed to create room: {response.text}")
+            print(f"Failed to create room: {response.text}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to create room",
@@ -72,13 +69,13 @@ async def get_map_room(
         room_id = response_data.get("room")
 
     if not room_id:
-        logger.error(f"Invalid response from DriftDB: {response_data}")
+        print(f"Invalid response from DriftDB: {response_data}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Invalid response from room creation service",
         )
 
     redis.setex(redis_key, 1800, room_id)  # 30 minutes TTL
-    logger.info(f"Created and stored new room {room_id} for map {map.id}")
+    print(f"Created and stored new room {room_id} for project {project.id}")
 
     return RoomResponse(room_id=room_id)
