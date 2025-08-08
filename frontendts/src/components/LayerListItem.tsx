@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import { MoreHorizontal } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import React from 'react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
@@ -39,6 +39,8 @@ interface LayerListItemProps {
   dropdownActions?: {
     [key: string]: DropdownAction;
   };
+  isVisible?: boolean;
+  onToggleVisibility?: (layerId: string) => void;
 }
 
 export const LayerListItem: React.FC<LayerListItemProps> = ({
@@ -55,6 +57,8 @@ export const LayerListItem: React.FC<LayerListItemProps> = ({
   displayAsDiff = false,
   layerId,
   dropdownActions = {},
+  isVisible = true,
+  onToggleVisibility,
 }) => {
   let liClassName = '';
 
@@ -114,11 +118,26 @@ export const LayerListItem: React.FC<LayerListItemProps> = ({
                 )}
               </span>
             )}
-            <div className="w-4 h-4 flex-shrink-0">
+            <div className="w-5 h-5 flex-shrink-0 relative">
               <div className="group-hover:hidden">{legendSymbol}</div>
-              <div className="hidden group-hover:block">
-                <MoreHorizontal className="w-4 h-4" />
-              </div>
+              <span
+                role="button"
+                tabIndex={0}
+                aria-label={isVisible ? 'Hide layer' : 'Show layer'}
+                className="hidden group-hover:flex items-center justify-center w-5 h-5 rounded cursor-pointer hover:bg-slate-200 dark:hover:bg-gray-500"
+                onPointerDown={(e) => {
+                  // Prevent triggering the parent DropdownMenuTrigger
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onToggleVisibility?.(layerId);
+                }}
+              >
+                {isVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+              </span>
             </div>
           </div>
         </button>

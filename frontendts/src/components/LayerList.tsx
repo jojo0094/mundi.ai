@@ -315,6 +315,10 @@ const LayerList: React.FC<LayerListProps> = ({
                     legendSymbol={<LayerLegendSymbol layerDetails={layerDetails} />}
                     displayAsDiff={currentMapData.display_as_diff}
                     layerId={layerDetails.id}
+                    isVisible={!hiddenLayerIDs.includes(layerDetails.id)}
+                    onToggleVisibility={(layerId) => {
+                      toggleLayerVisibility(layerId);
+                    }}
                     dropdownActions={{
                       'zoom-to-layer': {
                         label: 'Zoom to layer',
@@ -337,12 +341,6 @@ const LayerList: React.FC<LayerListProps> = ({
                           } else {
                             toast.info('Layer bounds not available for zoom.');
                           }
-                        },
-                      },
-                      'show-hide-layer': {
-                        label: hiddenLayerIDs.includes(layerDetails.id) ? 'Show layer' : 'Hide layer',
-                        action: (layerId) => {
-                          toggleLayerVisibility(layerId);
                         },
                       },
                       'view-attributes': {
