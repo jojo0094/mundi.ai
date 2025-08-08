@@ -18,9 +18,9 @@ from functools import lru_cache
 from typing import Tuple
 import secrets
 from src.structures import get_async_db_connection
-from src.utils import get_openai_client
 from .postgres_connection import PostgresConnectionManager
 from redis import Redis
+from openai import AsyncOpenAI
 import os
 
 redis = Redis(
@@ -47,6 +47,7 @@ class DatabaseDocumenter(ABC):
         connection_uri: str,
         connection_name: str,
         connection_manager: PostgresConnectionManager,
+        openai_client: AsyncOpenAI,
     ) -> Tuple[str, str]:
         """
         Generate database documentation and friendly name.
@@ -62,6 +63,7 @@ class DefaultDatabaseDocumenter(DatabaseDocumenter):
         connection_uri: str,
         connection_name: str,
         connection_manager: PostgresConnectionManager,
+        openai_client: AsyncOpenAI,
     ) -> Tuple[str, str]:
         """
         Generate basic database documentation and friendly name.
@@ -127,9 +129,6 @@ class DefaultDatabaseDocumenter(DatabaseDocumenter):
                 # Ensure the connection is closed to avoid leaks
                 await conn.close()
 
-            # OpenAI API call
-            client = get_openai_client()
-
             # Generate friendly name
             name_prompt = f"""Based on the following database tables, generate a short, friendly display name (2-4 words) that describes what this database contains or its purpose.
 
@@ -138,7 +137,7 @@ Tables: {", ".join(table_names)}
 
 Respond with ONLY the friendly name, no additional text."""
 
-            name_response = await client.chat.completions.create(
+            name_response = await openai_client.chat.completions.create(
                 model="gpt-4.1-nano",
                 messages=[
                     {"role": "user", "content": name_prompt},
@@ -166,7 +165,7 @@ Database Name: {connection_name}
 Schema:
 {schema_description}"""
 
-            response = await client.chat.completions.create(
+            response = await openai_client.chat.completions.create(
                 model="gpt-4.1-nano",
                 messages=[
                     {"role": "system", "content": system_prompt},

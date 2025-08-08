@@ -43,6 +43,7 @@ import botocore
 from src.utils import (
     get_bucket_name,
     get_async_s3_client,
+    get_openai_client,
 )
 import io
 from opentelemetry import trace
@@ -467,6 +468,7 @@ class DatabaseDocumentationResponse(BaseModel):
 async def add_postgis_connection(
     connection_data: PostgresConnectionRequest,
     background_tasks: BackgroundTasks,
+    request: Request,
     project: MundiProject = Depends(get_project),
     session: UserContext = Depends(verify_session_required),
     database_documenter: DatabaseDocumenter = Depends(get_database_documenter),
@@ -534,6 +536,7 @@ async def add_postgis_connection(
             connection_uri,
             connection_data.connection_name or "Database",
             connection_manager,
+            get_openai_client(request),
         )
 
         return PostgresCreateConnectionResponse(
@@ -648,6 +651,7 @@ async def get_database_documentation(
 async def regenerate_database_documentation(
     connection_id: str,
     background_tasks: BackgroundTasks,
+    request: Request,
     project: MundiProject = Depends(get_project),
     database_documenter: DatabaseDocumenter = Depends(get_database_documenter),
     connection_manager: PostgresConnectionManager = Depends(
@@ -679,6 +683,7 @@ async def regenerate_database_documentation(
             connection["connection_uri"],
             connection["connection_name"] or "Database",
             connection_manager,
+            get_openai_client(request),
         )
 
         return PostgresConnectionResponse(
