@@ -199,6 +199,7 @@ export default function ProjectView() {
 
   // WebSocket using react-use-websocket - only connect when in a conversation
   const shouldConnect = !sessionContext.loading && conversationId !== null && (isTabVisible || !hiddenTimeoutExpired);
+  const backoffMs = [30, 1_000, 5_000, 15_000, 50_000];
   const { lastMessage } = useWebSocket(
     wsUrl,
     {
@@ -207,7 +208,7 @@ export default function ProjectView() {
       },
       shouldReconnect: () => true,
       reconnectAttempts: 2880, // 24 hours of continuous work, at 30 seconds each = 2,880
-      reconnectInterval: 30, // interval *between* reconnects, 30 milliseconds
+      reconnectInterval: (attempt) => backoffMs[Math.min(attempt, backoffMs.length - 1)],
     },
     shouldConnect,
   );
