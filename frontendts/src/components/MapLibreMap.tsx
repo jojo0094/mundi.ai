@@ -1146,6 +1146,7 @@ export default function MapLibreMap({
             currentMapData={mapData}
             mapRef={mapRef}
             openDropzone={openDropzone}
+            isInConversation={conversationId !== null}
             readyState={readyState}
             activeActions={activeActions}
             driftDbConnected={status.connected}

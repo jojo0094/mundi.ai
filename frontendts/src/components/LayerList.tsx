@@ -52,6 +52,7 @@ interface LayerListProps {
   activeActions: EphemeralAction[];
   readyState: number;
   driftDbConnected: boolean;
+  isInConversation: boolean;
   setShowAttributeTable: (show: boolean) => void;
   setSelectedLayer: (layer: MapLayer | null) => void;
   updateMapData: () => void;
@@ -73,6 +74,7 @@ const LayerList: React.FC<LayerListProps> = ({
   readyState,
   activeActions,
   driftDbConnected,
+  isInConversation,
   setShowAttributeTable,
   setSelectedLayer,
   updateMapData,
@@ -232,7 +234,7 @@ const LayerList: React.FC<LayerListProps> = ({
           <div className="flex items-center gap-2">
             <Tooltip>
               <TooltipTrigger>
-                {readyState === ReadyState.OPEN && driftDbConnected ? (
+                {(!isInConversation || readyState === ReadyState.OPEN) && driftDbConnected ? (
                   <span className="text-green-300 inline-block">
                     <SignalHigh />
                   </span>
@@ -244,14 +246,16 @@ const LayerList: React.FC<LayerListProps> = ({
               </TooltipTrigger>
               <TooltipContent>
                 <div className="text-sm flex space-x-2">
-                  <div className={readyState === ReadyState.OPEN ? 'text-green-300' : 'text-red-300'}>
-                    chat:{' '}
-                    {readyState === ReadyState.OPEN ? (
-                      <SignalHigh className="inline-block h-4 w-4" />
-                    ) : (
-                      <SignalLow className="inline-block h-4 w-4" />
-                    )}
-                  </div>
+                  {isInConversation && (
+                    <div className={readyState === ReadyState.OPEN ? 'text-green-300' : 'text-red-300'}>
+                      chat:{' '}
+                      {readyState === ReadyState.OPEN ? (
+                        <SignalHigh className="inline-block h-4 w-4" />
+                      ) : (
+                        <SignalLow className="inline-block h-4 w-4" />
+                      )}
+                    </div>
+                  )}
                   <div className={driftDbConnected ? 'text-green-300' : 'text-red-300'}>
                     cursors:{' '}
                     {driftDbConnected ? <SignalHigh className="inline-block h-4 w-4" /> : <SignalLow className="inline-block h-4 w-4" />}
