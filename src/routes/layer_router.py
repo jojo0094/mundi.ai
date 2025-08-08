@@ -52,7 +52,10 @@ from src.postgis_tiles import fetch_mvt_tile
 from ..dependencies.layer_describer import LayerDescriber, get_layer_describer
 from ..dependencies.chat_completions import ChatArgsProvider, get_chat_args_provider
 from opentelemetry import trace
-from src.symbology.verify import StyleValidationError, verify_style_json_str
+from src.symbology.verify import (
+    StyleValidationError,
+    verify_style_json_str,
+)
 from src.dependencies.base_map import get_base_map_provider
 from src.utils import generate_id
 
@@ -1025,18 +1028,12 @@ async def set_layer_style(
                 detail=f"Layer source must be '{layer_id}'",
             )
 
-    from src.routes.postgres_routes import get_map_style_internal
-
-    style_json = await get_map_style_internal(
-        map_id=request.map_id,
-        base_map=get_base_map_provider(),
-        only_show_inline_sources=True,
-        override_layers=json.dumps({layer_id: layers}),
-    )
-
-    # Validate the complete style
     try:
-        verify_style_json_str(json.dumps(style_json))
+        await verify_style_json_str(
+            json.dumps(layers),
+            get_base_map_provider(),
+            layer,
+        )
     except StyleValidationError as e:
         raise HTTPException(
             status_code=400, detail=f"Style validation failed: {str(e)}"

@@ -16,6 +16,10 @@
 import subprocess
 import tempfile
 import os
+import json
+
+from src.dependencies.base_map import BaseMapProvider
+from src.database.models import MapLayer
 
 
 class StyleValidationError(Exception):
@@ -24,7 +28,7 @@ class StyleValidationError(Exception):
         super().__init__(self.message)
 
 
-def verify_style_json_str(style_json_str):
+def verify_full_style_json_str(style_json_str: str) -> bool:
     with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as temp_file:
         temp_path = temp_file.name
         temp_file.write(style_json_str.encode("utf-8"))
@@ -44,3 +48,41 @@ def verify_style_json_str(style_json_str):
             os.unlink(temp_path)
         except OSError:
             pass
+
+
+async def verify_style_json_str(
+    layers_str: str,
+    base_map: BaseMapProvider,
+    layer: MapLayer,
+) -> bool:
+    try:
+        layers = json.loads(layers_str)
+    except json.JSONDecodeError as e:
+        raise StyleValidationError(f"Invalid JSON: {e}")
+
+    if not isinstance(layers, list):
+        raise StyleValidationError("Expected layers to be a JSON array")
+
+    for layer_obj in layers:
+        if not isinstance(layer_obj, dict):
+            raise StyleValidationError(
+                f"Expected layer object to be a dict, got {type(layer_obj)}"
+            )
+
+        layer_obj["source-layer"] = "reprojectedfgb"
+
+        if layer_obj.get("source") != layer.layer_id:
+            raise StyleValidationError(f"Layer source must be '{layer.layer_id}'")
+
+    from src.routes.postgres_routes import get_map_style_internal
+
+    style_json = await get_map_style_internal(
+        map_id=layer.source_map_id,
+        base_map=base_map,
+        only_show_inline_sources=True,
+        override_layers=json.dumps({layer.layer_id: layers}),
+    )
+
+    verify_full_style_json_str(json.dumps(style_json))
+
+    return True

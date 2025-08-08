@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
-from src.symbology.verify import verify_style_json_str, StyleValidationError
+from src.symbology.verify import verify_full_style_json_str, StyleValidationError
 
 
 def test_verify_valid_style_json():
@@ -30,7 +30,7 @@ def test_verify_valid_style_json():
     ) as f:
         style_json_str = f.read()
 
-    is_valid = verify_style_json_str(style_json_str)
+    is_valid = verify_full_style_json_str(style_json_str)
     assert is_valid, "Valid style was incorrectly marked as invalid"
 
 
@@ -48,7 +48,7 @@ def test_verify_invalid_style_json():
         style_json_str = f.read()
 
     try:
-        result = verify_style_json_str(style_json_str)
+        result = verify_full_style_json_str(style_json_str)
         assert not result, "Invalid style was incorrectly marked as valid"
     except StyleValidationError as e:
         assert 'source "crimea" not found' in str(e), (
