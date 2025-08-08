@@ -29,6 +29,7 @@ import type { ChatCompletionUserMessageParam } from 'openai/resources/chat/compl
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download } from 'react-bootstrap-icons';
 import ReactMarkdown from 'react-markdown';
+import { ReadyState } from 'react-use-websocket';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 import AttributeTable from '@/components/AttributeTable';
@@ -46,7 +47,6 @@ import type {
   MapProject,
   MapTreeResponse,
   MessageSendRequest,
-  MessageSendResponse,
   PointerPosition,
   PresenceData,
   SanitizedMessage,
@@ -244,6 +244,7 @@ interface MapLibreMapProps {
   conversationId: number | null;
   conversations: Conversation[];
   setConversationId: (conversationId: number | null) => void;
+  readyState: number;
   openDropzone?: () => void;
   invalidateProjectData: () => void;
   uploadingFiles?: UploadingFile[];
@@ -272,6 +273,7 @@ export default function MapLibreMap({
   conversationId,
   conversations,
   setConversationId,
+  readyState,
   openDropzone,
   uploadingFiles,
   hiddenLayerIDs,
@@ -924,6 +926,11 @@ export default function MapLibreMap({
 
   const status = useConnectionStatus();
   const [inputValue, setInputValue] = useState('');
+  const readyStateRef = useRef<number>(readyState);
+
+  useEffect(() => {
+    readyStateRef.current = readyState;
+  }, [readyState]);
 
   // Function to send a message
   const sendMessage = async (text: string) => {
@@ -935,6 +942,7 @@ export default function MapLibreMap({
       role: 'user',
       content: text,
     };
+
     // Create and add ephemeral action
     const actionId = `send-message-${Date.now()}`;
     const sendingAction: EphemeralAction = {
@@ -950,12 +958,51 @@ export default function MapLibreMap({
         style_json: false,
       },
     };
-    setActiveActions((prev) => [...prev, sendingAction]);
 
     try {
-      // set to NEW if not in a conversation
-      // Create conversation if it doesn't exist
-      const currentConversationId: number | string = conversationId || 'NEW';
+      let conversationIdToUse: number | null = conversationId;
+
+      // If no conversation, create one first
+      if (conversationIdToUse === null) {
+        // Creating conversation also an ephemeral action
+        const createConversationAction: EphemeralAction = {
+          map_id: mapId,
+          ephemeral: true,
+          action_id: `create-conversation-${Date.now()}`,
+          action: 'Creating new conversation...',
+          timestamp: new Date().toISOString(),
+          completed_at: null,
+          layer_id: null,
+          status: 'active',
+          updates: {
+            style_json: false,
+          },
+        };
+        setActiveActions((prev) => [...prev, createConversationAction]);
+
+        const createResp = await fetch(`/api/conversations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ project_id: project.id }),
+        });
+        if (!createResp.ok) {
+          const err = await createResp.json().catch(() => ({ detail: createResp.statusText }));
+          throw new Error(err.detail || createResp.statusText);
+        }
+        const newConv = (await createResp.json()) as Conversation;
+        conversationIdToUse = newConv.id;
+        setConversationId(conversationIdToUse);
+
+        // Wait briefly for websocket to connect to the new conversation
+        const maxWaitMs = 10000;
+        const start = Date.now();
+        while (Date.now() - start < maxWaitMs && readyStateRef.current !== ReadyState.OPEN) {
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        setActiveActions((prev) => prev.filter((a) => a.action_id !== createConversationAction.action_id));
+      }
+
+      setActiveActions((prev) => [...prev, sendingAction]);
 
       const sendBody: MessageSendRequest = {
         message: userMessage,
@@ -968,7 +1015,7 @@ export default function MapLibreMap({
         };
       }
 
-      const response = await fetch(`/api/maps/conversations/${currentConversationId}/maps/${mapId}/send`, {
+      const response = await fetch(`/api/maps/conversations/${conversationIdToUse}/maps/${mapId}/send`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -977,10 +1024,7 @@ export default function MapLibreMap({
       });
 
       if (response.ok) {
-        const data: MessageSendResponse = await response.json();
-        if (currentConversationId === 'NEW') {
-          setConversationId(data.conversation_id);
-        }
+        await response.json();
         invalidateProjectData();
       } else {
         const errorData = await response.json().catch(() => ({ detail: response.statusText }));
@@ -1102,7 +1146,7 @@ export default function MapLibreMap({
             currentMapData={mapData}
             mapRef={mapRef}
             openDropzone={openDropzone}
-            readyState={1}
+            readyState={readyState}
             activeActions={activeActions}
             driftDbConnected={status.connected}
             setShowAttributeTable={setShowAttributeTable}

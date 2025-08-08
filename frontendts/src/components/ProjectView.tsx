@@ -200,7 +200,7 @@ export default function ProjectView() {
   // WebSocket using react-use-websocket - only connect when in a conversation
   const shouldConnect = !sessionContext.loading && conversationId !== null && (isTabVisible || !hiddenTimeoutExpired);
   const backoffMs = [30, 1_000, 5_000, 15_000, 50_000];
-  const { lastMessage } = useWebSocket(
+  const { lastMessage, readyState } = useWebSocket(
     wsUrl,
     {
       onError: () => {
@@ -515,6 +515,7 @@ export default function ProjectView() {
             conversationId={conversationId}
             conversations={conversations || []}
             setConversationId={setConversationId}
+            readyState={readyState}
             openDropzone={open}
             uploadingFiles={uploadingFiles}
             hiddenLayerIDs={hiddenLayerIDs}
