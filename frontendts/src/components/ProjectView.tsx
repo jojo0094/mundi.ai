@@ -60,13 +60,11 @@ export default function ProjectView() {
     queryClient.invalidateQueries({ queryKey: ['project', projectId] });
   }, [queryClient, projectId]);
 
-  const {
-    isPending,
-    error,
-    data: mapData,
-  } = useQuery({
+  const { error, data: mapData } = useQuery({
     queryKey: ['project', projectId, 'map', versionId],
     queryFn: () => fetch(`/api/maps/${versionId}?diff_map_id=auto`).then((res) => res.json()),
+    // prevent map (query parameter) refreshing this
+    refetchOnMount: false,
     enabled: !!versionId,
   });
 
@@ -462,14 +460,6 @@ export default function ProjectView() {
         <h1 className="text-2xl font-bold mb-4">
           Loading project {projectId} version {versionId}...
         </h1>
-      </div>
-    );
-  }
-
-  if (isPending) {
-    return (
-      <div className="p-6">
-        <h1 className="text-2xl font-bold mb-4">Loading map data...</h1>
       </div>
     );
   }
