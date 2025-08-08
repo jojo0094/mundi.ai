@@ -52,6 +52,8 @@ import type {
   SanitizedMessage,
 } from '../lib/types';
 
+const EMPTY_POINT_CLOUD_LAYERS: MapLayer[] = [];
+
 // Import styles in the parent component
 const KUE_MESSAGE_STYLE = `
   text-sm
@@ -307,7 +309,8 @@ export default function MapLibreMap({
   }>({ available: false, description: '' });
 
   const pointCloudLayers = useMemo(() => {
-    return mapData?.layers?.filter((layer) => layer.type === 'point_cloud') || [];
+    const filtered = mapData?.layers?.filter((layer) => layer.type === 'point_cloud') ?? EMPTY_POINT_CLOUD_LAYERS;
+    return filtered.length === 0 ? EMPTY_POINT_CLOUD_LAYERS : filtered;
   }, [mapData?.layers]);
 
   const createPointCloudLayer = useCallback((pclayer: MapLayer) => {
