@@ -747,30 +747,6 @@ export default function MapLibreMap({
         newMap.addControl(new NavigationControl(), 'top-right');
         newMap.addControl(new ScaleControl(), 'bottom-left');
 
-        // Add export PDF control below the navigation controls
-        const exportPDFControl = new ExportPDFControl(mapId);
-        exportPDFControlRef.current = exportPDFControl;
-        newMap.addControl(exportPDFControl, 'top-right');
-
-        newMap.on('click', (e) => {
-          const features = newMap.queryRenderedFeatures(e.point);
-          if (!features.length) {
-            // deselect feature if no features are found
-            selectFeature(null);
-            return;
-          }
-
-          const feature = features[0];
-
-          // only select features from mundi sources)
-          if (!(feature.source.startsWith('L') && feature.source.length == 12)) {
-            // technically, this too deselects
-            selectFeature(null);
-          } else {
-            selectFeature(feature);
-          }
-        });
-
         const overlaidPCLayers = pointCloudLayers.map((layer) => createPointCloudLayer(layer));
 
         const deckOverlay = new MapboxOverlay({
@@ -829,7 +805,6 @@ export default function MapLibreMap({
       });
 
       newMap.on('style.load', () => {
-        loadLegendSymbols(newMap);
         loadCursorImage();
       });
 
@@ -846,7 +821,63 @@ export default function MapLibreMap({
       addError('Failed to initialize map: ' + (err instanceof Error ? err.message : String(err)), true);
       setLoading(false);
     }
-  }, [addError, loadLegendSymbols, mapId, pointCloudLayers, createPointCloudLayer, mapRef, selectFeature]); // listen to point cloud layers
+  }, [addError, pointCloudLayers, createPointCloudLayer, mapRef]); // listen to point cloud layers
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const onClick = (e: any) => {
+      const features = map.queryRenderedFeatures(e.point);
+      if (!features.length) {
+        selectFeature(null);
+        return;
+      }
+
+      const feature = features[0];
+      if (!(typeof feature.source === 'string' && feature.source.startsWith('L') && feature.source.length === 12)) {
+        selectFeature(null);
+      } else {
+        selectFeature(feature);
+      }
+    };
+
+    map.on('click', onClick);
+    return () => {
+      map.off('click', onClick);
+    };
+  }, [mapRef, selectFeature]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (exportPDFControlRef.current) {
+      try {
+        map.removeControl(exportPDFControlRef.current);
+      } catch (err) {
+        console.debug('ExportPDFControl removeControl failed (pre-add cleanup)', err);
+      }
+      exportPDFControlRef.current = null;
+    }
+
+    if (!mapId) return;
+
+    const exportPDFControl = new ExportPDFControl(mapId);
+    exportPDFControlRef.current = exportPDFControl;
+    map.addControl(exportPDFControl, 'top-right');
+
+    return () => {
+      if (exportPDFControlRef.current) {
+        try {
+          map.removeControl(exportPDFControlRef.current);
+        } catch (err) {
+          console.debug('ExportPDFControl removeControl failed (cleanup)', err);
+        }
+        exportPDFControlRef.current = null;
+      }
+    };
+  }, [mapRef, mapId]);
 
   const styleUpdateCounter = useMemo(() => {
     return activeActions.filter((a) => a.updates.style_json).length;
