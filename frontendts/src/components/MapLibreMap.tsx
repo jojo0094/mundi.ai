@@ -396,7 +396,6 @@ export default function MapLibreMap({
     return layer;
   }, []);
 
-  const [loading, setLoading] = useState(true);
   const [pointerPosition, setPointerPosition] = useState<PointerPosition | null>(null);
   const otherClientPositions = usePresence<PointerPosition | null>('cursors', pointerPosition);
   const [showAttributeTable, setShowAttributeTable] = useState(false);
@@ -758,8 +757,6 @@ export default function MapLibreMap({
 
         // Load cursor image initially
         loadCursorImage();
-
-        setLoading(false);
       });
 
       newMap.on('mousemove', (e) => {
@@ -800,8 +797,6 @@ export default function MapLibreMap({
           // Unknown type of error?
           addError('Error loading map data: ' + e.error.message, true);
         }
-
-        setLoading(false);
       });
 
       newMap.on('style.load', () => {
@@ -819,7 +814,6 @@ export default function MapLibreMap({
     } catch (err) {
       console.error('Error initializing map:', err);
       addError('Failed to initialize map: ' + (err instanceof Error ? err.message : String(err)), true);
-      setLoading(false);
     }
   }, [addError, pointCloudLayers, createPointCloudLayer, mapRef]); // listen to point cloud layers
 
@@ -1340,12 +1334,6 @@ export default function MapLibreMap({
             </Tooltip>
           )}
         </div>
-
-        {loading && (
-          <div className="flex items-center justify-center">
-            <div className="text-gray-700">Loading map...</div>
-          </div>
-        )}
       </div>
 
       <VersionVisualization
