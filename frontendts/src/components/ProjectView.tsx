@@ -28,6 +28,7 @@ const DROPZONE_ACCEPT: Accept = {
   'application/zip': ['.zip'],
   'application/vnd.las': ['.las'],
   'application/las+zip': ['.laz'],
+  'text/csv': ['.csv'],
 };
 
 export default function ProjectView() {
