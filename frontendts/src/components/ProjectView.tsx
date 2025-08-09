@@ -2,6 +2,7 @@
 
 import { DriftDBProvider } from 'driftdb-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { Accept } from 'react-dropzone';
 import { useDropzone } from 'react-dropzone';
 import { useNavigate, useParams } from 'react-router-dom';
 import useWebSocket from 'react-use-websocket';
@@ -14,6 +15,20 @@ import { toast } from 'sonner';
 import type { ErrorEntry, UploadingFile } from '../lib/frontend-types';
 import type { Conversation, EphemeralAction, MapProject, MapTreeResponse } from '../lib/types';
 import { usePersistedState } from '../lib/usePersistedState';
+
+const DROPZONE_ACCEPT: Accept = {
+  'application/geo+json': ['.geojson', '.json'],
+  'application/vnd.google-earth.kml+xml': ['.kml'],
+  'application/vnd.google-earth.kmz': ['.kmz'],
+  'image/tiff': ['.tif', '.tiff'],
+  'image/jpeg': ['.jpg', '.jpeg'],
+  'image/png': ['.png'],
+  'application/geopackage+sqlite3': ['.gpkg'],
+  'application/octet-stream': ['.fgb', '.dem'],
+  'application/zip': ['.zip'],
+  'application/vnd.las': ['.las'],
+  'application/las+zip': ['.laz'],
+};
 
 export default function ProjectView() {
   const navigate = useNavigate();
@@ -132,6 +147,15 @@ export default function ProjectView() {
   // Helper function to dismiss a specific error
   const dismissError = useCallback((errorId: string) => {
     setErrors((prevErrors) => prevErrors.filter((error) => error.id !== errorId));
+  }, []);
+
+  const allowedExtensions = useMemo(() => {
+    const exts: string[] = [];
+    for (const key in DROPZONE_ACCEPT) {
+      const arr = DROPZONE_ACCEPT[key as keyof typeof DROPZONE_ACCEPT];
+      if (Array.isArray(arr)) exts.push(...arr);
+    }
+    return Array.from(new Set(exts));
   }, []);
 
   // Add state for tracking uploading files
@@ -416,20 +440,13 @@ export default function ProjectView() {
 
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
-    noClick: true, // Prevent opening the file dialog when clicking
-    accept: {
-      'application/geo+json': ['.geojson', '.json'],
-      'application/vnd.google-earth.kml+xml': ['.kml'],
-      'application/vnd.google-earth.kmz': ['.kmz'],
-      'image/tiff': ['.tif', '.tiff'],
-      'image/jpeg': ['.jpg', '.jpeg'],
-      'image/png': ['.png'],
-      'application/geopackage+sqlite3': ['.gpkg'],
-      'application/octet-stream': ['.fgb', '.dem'],
-      'application/zip': ['.zip'],
-      'application/vnd.las': ['.las'],
-      'application/las+zip': ['.laz'],
+    onDropRejected: (fileRejections) => {
+      for (const rejection of fileRejections) {
+        addError(`Cannot upload "${rejection.file.name}": Allowed extensions: ${allowedExtensions.join(', ')}`);
+      }
     },
+    noClick: true, // Prevent opening the file dialog when clicking
+    accept: DROPZONE_ACCEPT,
   });
 
   // Let them hide certain layers client-side only
