@@ -779,6 +779,8 @@ export default function MapLibreMap({
 
                 if ('detail' in bodyObj) {
                   addError(bodyObj.detail, true);
+                } else if ('message' in bodyObj && bodyObj['message'] === 'try refresh token') {
+                  addError('Session expired, please refresh the page', true);
                 } else {
                   addError(bodyStr, true);
                 }
