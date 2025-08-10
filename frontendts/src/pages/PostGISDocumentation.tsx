@@ -1,6 +1,6 @@
 // Copyright Bunting Labs, Inc. 2025
 
-import { ArrowLeft, Database, Loader2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Database, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -32,6 +32,7 @@ const PostGISDocumentation = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [navigationItems, setNavigationItems] = useState<NavigationItem[]>([]);
 
   const fetchDocumentation = useCallback(async () => {
@@ -149,6 +150,30 @@ const PostGISDocumentation = () => {
     }
   };
 
+  const handleDelete = async () => {
+    if (!connectionId || !projectId) return;
+
+    setIsDeleting(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/postgis-connections/${connectionId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete connection: ${response.statusText}`);
+      }
+
+      // Navigate back to the project after successful deletion
+      navigate(-1);
+    } catch (err) {
+      console.error('Error deleting PostGIS connection:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete connection');
+      setIsDeleting(false);
+    }
+  };
+
   const fallbackContent = `
 Documentation is being generated for this database. Please check back in a few moments.
 
@@ -170,16 +195,28 @@ If documentation generation fails, this indicates the database connection detail
               <h1 className="text-xl font-semibold">{connectionName || 'Database Documentation'}</h1>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRegenerate}
-            disabled={isRegenerating || loading}
-            className="flex items-center gap-2 hover:cursor-pointer"
-          >
-            {isRegenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            {isRegenerating ? 'Regenerating...' : 'Regenerate'}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRegenerate}
+              disabled={isRegenerating || loading || isDeleting}
+              className="flex items-center gap-2 hover:cursor-pointer"
+            >
+              {isRegenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {isRegenerating ? 'Regenerating...' : 'Regenerate'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDelete}
+              disabled={isDeleting || loading || isRegenerating}
+              className="flex items-center gap-2 hover:cursor-pointer text-red-400 hover:text-red-300 border-red-500 hover:border-red-400"
+            >
+              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </div>
         </div>
       </div>
 
