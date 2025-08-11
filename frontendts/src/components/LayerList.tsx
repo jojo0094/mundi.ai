@@ -109,6 +109,7 @@ const LayerList: React.FC<LayerListProps> = ({
   const [postgisError, setPostgisError] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showRemoteUrlDialog, setShowRemoteUrlDialog] = useState(false);
+  const [portError, setPortError] = useState<string | null>(null);
 
   const postgisConnectionMutation = useMutation({
     mutationFn: async (connectionUri: string) => {
@@ -181,6 +182,14 @@ const LayerList: React.FC<LayerListProps> = ({
     if (!currentMapData?.project_id) {
       toast.error('No project ID available');
       return;
+    }
+
+    // Simple inline validation for numeric port when using field-based connection method
+    if (connectionMethod === 'fields') {
+      if (postgisForm.port && !/^\d+$/.test(postgisForm.port)) {
+        setPortError('Port must be a number');
+        return;
+      }
     }
 
     let connectionUri = '';
@@ -780,14 +789,23 @@ const LayerList: React.FC<LayerListProps> = ({
                         id="port"
                         placeholder="5432"
                         value={postgisForm.port}
+                        aria-invalid={!!portError}
                         onChange={(e) => {
                           setPostgisForm((prev) => ({
                             ...prev,
                             port: e.target.value,
                           }));
+                          // Inline numeric validation
+                          const value = e.target.value;
+                          if (value && !/^\d+$/.test(value)) {
+                            setPortError('Port must be a number');
+                          } else {
+                            setPortError(null);
+                          }
                           setPostgisError(null);
                         }}
                       />
+                      {portError && <p className="text-destructive text-xs">{portError}</p>}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
