@@ -16,7 +16,7 @@ import {
   Wrench,
   ZoomIn,
 } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { dark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
@@ -182,6 +182,7 @@ export default function VersionVisualization({
 }: VersionVisualizationProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedToolCalls, setExpandedToolCalls] = useState<string[]>([]);
+  const [expandedEditGroups, setExpandedEditGroups] = useState<string[]>([]);
 
   // Helper function to get messages for a specific map_id
   const getMessagesForMap = useCallback(
@@ -245,7 +246,124 @@ export default function VersionVisualization({
     [currentMapId],
   );
 
-  if (!mapTree) return null;
+  // Do not early-return here to avoid conditional hooks; below render paths handle null mapTree gracefully
+
+  // Build grouped display items where runs of map nodes with no messages are collapsed
+  const MIN_GROUP_SIZE = 3; // collapse only when there are 3 or more consecutive edits with no messages
+
+  type DisplayItem = { type: 'node'; node: MapNode } | { type: 'group'; id: string; nodes: MapNode[] };
+
+  const displayItems: DisplayItem[] = useMemo(() => {
+    if (!mapTree) return [];
+    const items: DisplayItem[] = [];
+    const nodes = mapTree.tree;
+
+    let i = 0;
+    while (i < nodes.length) {
+      const node = nodes[i];
+      const messages = getMessagesForMap(node.map_id);
+      if (messages.length === 0) {
+        // Start of a potential group
+        let j = i;
+        while (j < nodes.length) {
+          const hasMsgs = getMessagesForMap(nodes[j].map_id).length > 0;
+          if (hasMsgs) break;
+          j++;
+        }
+        const runLength = j - i;
+        if (runLength >= MIN_GROUP_SIZE) {
+          const groupNodes = nodes.slice(i, j);
+          const groupId = `conv-${conversationId ?? 'new'}-group-${groupNodes[0].map_id}-${groupNodes[groupNodes.length - 1].map_id}`;
+          items.push({ type: 'group', id: groupId, nodes: groupNodes });
+          i = j;
+          continue;
+        }
+        // Not enough to form group, push nodes individually
+        items.push({ type: 'node', node });
+        i++;
+      } else {
+        items.push({ type: 'node', node });
+        i++;
+      }
+    }
+    return items;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapTree, getMessagesForMap, conversationId]);
+
+  // Auto-expand any group that contains the current map id so it remains visible
+  useEffect(() => {
+    if (!currentMapId) return;
+    const containing = displayItems.find((it) => it.type === 'group' && it.nodes.some((n) => n.map_id === currentMapId)) as
+      | Extract<DisplayItem, { type: 'group' }>
+      | undefined;
+    if (containing) {
+      setExpandedEditGroups((prev) => (prev.includes(containing.id) ? prev : [...prev, containing.id]));
+    }
+  }, [currentMapId, displayItems]);
+
+  const toggleGroup = (groupId: string) => {
+    setExpandedEditGroups((prev) => (prev.includes(groupId) ? prev.filter((id) => id !== groupId) : [...prev, groupId]));
+  };
+
+  // Renderer for a single map node (edit + its messages)
+  const renderMapNode = (node: MapNode) => {
+    return (
+      <div key={node.map_id} className="relative">
+        {/* Map edit node */}
+        <div className="flex items-center gap-4">
+          {/* Left side - Edit indicator */}
+          <div className="flex-4 flex justify-between text-halfway-sm-xs">
+            <div className="flex items-baseline">
+              <span className="text-gray-400 text-halfway-sm-xs" title={new Date(node.created_on).toLocaleString()}>
+                <span className="text-gray-200">{node.fork_reason == 'ai_edit' ? 'Kue, ' : 'You, '}</span>
+                {formatShortRelativeTime(node.created_on)}
+              </span>
+            </div>
+            <div className="flex items-baseline">
+              <div className={`${getNodePresentation(node).textColor}`}>{getEditIcon(node)}</div>
+              <div className="text-halfway-sm-xs ml-1">
+                <div className="dark:text-gray-200 text-ellipsis overflow-hidden">{getEditDescription(node)}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Center - Timeline dot */}
+          <div className="relative z-10 flex flex-col items-center">
+            <div className={`flex items-center justify-center w-6 h-6 rounded-full ${getNodePresentation(node).color}`}>
+              {getNodePresentation(node).icon}
+            </div>
+          </div>
+        </div>
+
+        {/* Messages associated with this map_id */}
+        <div className="flex">
+          {/* Left side - Messages */}
+          <div className="flex flex-col space-y-1 py-2 flex-4">
+            {(() => {
+              const messages = getMessagesForMap(node.map_id);
+              const toolResponses = messages.filter((msg) => msg.role === 'tool' && msg.tool_response).map((msg) => msg.tool_response!);
+
+              return messages.map((msg, msgIndex) => (
+                <MessageItem
+                  key={`message-${node.map_id}-${msgIndex}`}
+                  message={msg}
+                  msgIndex={msgIndex}
+                  expandedToolCalls={expandedToolCalls}
+                  setExpandedToolCalls={setExpandedToolCalls}
+                  toolResponses={toolResponses}
+                />
+              ));
+            })()}
+          </div>
+
+          {/* Center - connecting line space */}
+          <div className="w-6 flex justify-center">
+            <div className={`relative w-0.25 h-full min-h-4 ${getNodePresentation(node).color}`}></div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="z-30 max-h-screen h-full w-96 bg-white dark:bg-gray-800 shadow-md flex flex-col text-halfway-sm-xs">
@@ -312,64 +430,56 @@ export default function VersionVisualization({
         </div>
 
         <div className="relative">
-          {mapTree.tree.map((node) => (
-            <div key={node.map_id} className="relative">
-              {/* Map edit node */}
-              <div className="flex items-center gap-4">
-                {/* Left side - Edit indicator */}
-                <div className="flex-4 flex justify-between text-halfway-sm-xs">
-                  <div className="flex items-baseline">
-                    <span className="text-gray-400 text-halfway-sm-xs" title={new Date(node.created_on).toLocaleString()}>
-                      <span className="text-gray-200">{node.fork_reason == 'ai_edit' ? 'Kue, ' : 'You, '}</span>
-                      {formatShortRelativeTime(node.created_on)}
-                    </span>
+          {displayItems.map((item) => {
+            if (item.type === 'node') {
+              return renderMapNode(item.node);
+            }
+            const { id, nodes } = item;
+            const isOpen = expandedEditGroups.includes(id);
+            const count = nodes.length;
+            return (
+              <div key={id} className="relative">
+                {/* Collapsed/Expanded group header */}
+                <div className="flex items-center gap-4">
+                  {/* Left side - Group indicator */}
+                  <div className="flex-4 flex justify-between text-halfway-sm-xs">
+                    <div className="flex items-center gap-2">
+                      <button
+                        className={`flex items-center gap-2 text-gray-300 hover:text-gray-100 cursor-pointer`}
+                        onClick={() => toggleGroup(id)}
+                        title={isOpen ? 'Collapse edits' : 'Expand edits'}
+                      >
+                        {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        <Edit3 className="w-4 h-4" />
+                        <span className="whitespace-nowrap">
+                          {count} {isOpen ? 'visible' : 'hidden'} edits
+                        </span>
+                      </button>
+                    </div>
+                    <div />
                   </div>
-                  <div className="flex items-baseline">
-                    <div className={`${getNodePresentation(node).textColor}`}>{getEditIcon(node)}</div>
-                    <div className="text-halfway-sm-xs ml-1">
-                      <div className="dark:text-gray-200 text-ellipsis overflow-hidden">{getEditDescription(node)}</div>
+
+                  {/* Center - Group timeline dot */}
+                  <div className="relative z-10 flex flex-col items-center">
+                    <div className={`flex items-center justify-center w-6 h-6 rounded-full bg-gray-300`}>
+                      <Edit3 className="w-4 h-4 text-black" />
                     </div>
                   </div>
                 </div>
 
-                {/* Center - Timeline dot */}
-                <div className="relative z-10 flex flex-col items-center">
-                  <div className={`flex items-center justify-center w-6 h-6 rounded-full ${getNodePresentation(node).color}`}>
-                    {getNodePresentation(node).icon}
+                {/* Center - connecting line space under header */}
+                <div className="flex">
+                  <div className="flex flex-col space-y-1 py-2 flex-4"></div>
+                  <div className="w-6 flex justify-center">
+                    <div className={`relative w-0.25 h-full min-h-4 bg-gray-300`}></div>
                   </div>
                 </div>
+
+                {/* Expanded content */}
+                {isOpen && nodes.map((n) => renderMapNode(n))}
               </div>
-
-              {/* Messages associated with this map_id */}
-              <div className="flex">
-                {/* Left side - Messages */}
-                <div className="flex flex-col space-y-1 py-2 flex-4">
-                  {(() => {
-                    const messages = getMessagesForMap(node.map_id);
-                    const toolResponses = messages
-                      .filter((msg) => msg.role === 'tool' && msg.tool_response)
-                      .map((msg) => msg.tool_response!);
-
-                    return messages.map((msg, msgIndex) => (
-                      <MessageItem
-                        key={`message-${msgIndex}`}
-                        message={msg}
-                        msgIndex={msgIndex}
-                        expandedToolCalls={expandedToolCalls}
-                        setExpandedToolCalls={setExpandedToolCalls}
-                        toolResponses={toolResponses}
-                      />
-                    ));
-                  })()}
-                </div>
-
-                {/* Center - connecting line space */}
-                <div className="w-6 flex justify-center">
-                  <div className={`relative w-0.25 h-full min-h-4 ${getNodePresentation(node).color}`}></div>
-                </div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
 
           {activeActions.length > 0 && (
             <div className="relative">
