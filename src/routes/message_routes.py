@@ -448,10 +448,11 @@ async def run_geoprocessing_tool(
                 if key == "OUTPUT":
                     continue
                 elif is_layer_id(val):
+                    # TODO: fetch type, and if its postgis, fetch the value from postgis
                     # This is a layer ID, get the S3 key from database and create presigned URL
                     layer_data = await conn.fetchrow(
                         """
-                        SELECT s3_key FROM map_layers
+                        SELECT s3_key, type FROM map_layers
                         WHERE layer_id = $1 AND owner_uuid = $2
                         """,
                         val,
@@ -461,6 +462,12 @@ async def run_geoprocessing_tool(
                     if not layer_data or not layer_data["s3_key"]:
                         raise RecoverableToolCallError(
                             f"Layer {val} not found or has no S3 key",
+                            tool_call.id,
+                        )
+
+                    if layer_data["type"] == "postgis":
+                        raise RecoverableToolCallError(
+                            f"Layer {val} is from a PostGIS connection, not yet supported by geoprocessing",
                             tool_call.id,
                         )
 
