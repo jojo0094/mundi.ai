@@ -169,3 +169,17 @@ If the connection times out (Mundi defaults to 10 second limit), it's likely tha
 is not accessible from the internet, either due to a firewall or the database is on your local
 network. In order to be accessible, the database must be pinned to a public static IPv4 address
 allowing ingress and egress traffic.
+
+## Row Level Security (RLS)
+
+:::note[Advanced configuration]
+[Row-level security](https://www.postgresql.org/docs/current/ddl-rowsecurity.html) is an advanced
+PostgreSQL configuration that allows for granular user access to particular rows in a table.
+Most deployments of Mundi don't benefit from row level security.
+:::
+
+Because Mundi simply connects to added PostGIS databases as the provided user in read-only mode, Mundi connections inherit the
+row-level security of the existing database user and are treated as ordinary PostgreSQL connections.
+
+Mundi does not administer or edit row security policies.
+[AWS has a tutorial on enabling RLS](https://docs.aws.amazon.com/prescriptive-guidance/latest/saas-multitenant-managed-postgresql/rls.html).
