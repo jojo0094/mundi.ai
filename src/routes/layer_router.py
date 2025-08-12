@@ -16,6 +16,7 @@
 import os
 import json
 import asyncpg
+import gzip
 from fastapi import (
     APIRouter,
     HTTPException,
@@ -665,14 +666,34 @@ async def get_layer_mvt_tile(
         if mvt_data is None:
             mvt_data = b""
 
-        return Response(
-            content=mvt_data,
-            media_type="application/vnd.mapbox-vector-tile",
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Cache-Control": "public, max-age=3600",
-            },
-        )
+        # Check if client accepts gzip encoding and if there's data to compress
+        accept_encoding = request.headers.get("accept-encoding", "").lower()
+        should_compress = "gzip" in accept_encoding and len(mvt_data) > 0
+
+        if should_compress:
+            # Compress MVT data with gzip for better performance
+            compressed_data = gzip.compress(mvt_data, compresslevel=6)
+            return Response(
+                content=compressed_data,
+                media_type="application/vnd.mapbox-vector-tile",
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Cache-Control": "public, max-age=3600",
+                    "Content-Encoding": "gzip",
+                    "Vary": "Accept-Encoding",
+                },
+            )
+        else:
+            # Return uncompressed data
+            return Response(
+                content=mvt_data,
+                media_type="application/vnd.mapbox-vector-tile",
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Cache-Control": "public, max-age=3600",
+                    "Vary": "Accept-Encoding",
+                },
+            )
 
     except asyncpg.exceptions.InternalServerError as e:
         # Re-raise any other internal server errors that aren't handled by the fallback
