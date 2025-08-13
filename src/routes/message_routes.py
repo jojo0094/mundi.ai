@@ -1095,6 +1095,7 @@ async def process_chat_interaction_task(
                                                 feature_count = None
                                                 bounds = None
                                                 geometry_type = None
+                                                metadata_dict = {}
 
                                                 # Calculate feature count
                                                 count_result = await pg.fetchval(
@@ -1170,8 +1171,9 @@ async def process_chat_interaction_task(
                                                                     ST_YMax(extent_geom)
                                                                 ELSE
                                                                     ST_YMax(ST_Transform(ST_SetSRID(extent_geom, original_srid), 4326))
-                                                            END as ymax
-                                                        FROM extent_data
+                                                             END as ymax,
+                                                             original_srid
+                                                         FROM extent_data
                                                         WHERE extent_geom IS NOT NULL
                                                         """
                                                     )
@@ -1194,6 +1196,28 @@ async def process_chat_interaction_task(
                                                                 bounds_result["ymax"]
                                                             ),
                                                         ]
+                                                        # Capture original SRID into metadata if available
+                                                        if (
+                                                            "original_srid"
+                                                            in bounds_result
+                                                            and bounds_result[
+                                                                "original_srid"
+                                                            ]
+                                                            is not None
+                                                        ):
+                                                            try:
+                                                                metadata_dict[
+                                                                    "original_srid"
+                                                                ] = int(
+                                                                    bounds_result[
+                                                                        "original_srid"
+                                                                    ]
+                                                                )
+                                                            except (
+                                                                ValueError,
+                                                                TypeError,
+                                                            ):
+                                                                pass
                                                 else:
                                                     print(
                                                         "Warning: No geometry column found in PostGIS query"
@@ -1226,8 +1250,8 @@ async def process_chat_interaction_task(
                                             await conn.execute(
                                                 """
                                                 INSERT INTO map_layers
-                                                (layer_id, owner_uuid, name, type, postgis_connection_id, postgis_query, feature_count, bounds, geometry_type, source_map_id, created_on, last_edited, postgis_attribute_column_list)
-                                                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, $11)
+                                                (layer_id, owner_uuid, name, type, postgis_connection_id, postgis_query, metadata, feature_count, bounds, geometry_type, source_map_id, created_on, last_edited, postgis_attribute_column_list)
+                                                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, $12)
                                                 """,
                                                 layer_id,
                                                 user_id,
@@ -1235,6 +1259,7 @@ async def process_chat_interaction_task(
                                                 "postgis",
                                                 postgis_connection_id,
                                                 query,
+                                                json.dumps(metadata_dict),
                                                 feature_count,
                                                 bounds,
                                                 geometry_type,
