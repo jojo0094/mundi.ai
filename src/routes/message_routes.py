@@ -664,7 +664,7 @@ async def process_chat_interaction_task(
             message_dict = (
                 message.model_dump() if isinstance(message, BaseModel) else message
             )
-            print("adding message", message_dict, conversation.id)
+
             await conn.execute(
                 """
                 INSERT INTO chat_completion_messages
@@ -1834,7 +1834,6 @@ async def process_chat_interaction_task(
         #     await label_conversation_inline(conversation.id)
 
         # Unlock the map when processing is complete
-        print("deleting lock", conversation.id)
         redis.delete(f"chat_lock:{conversation.id}")
 
 
