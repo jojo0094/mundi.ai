@@ -47,7 +47,7 @@ from starlette.responses import (
     JSONResponse as StarletteJSONResponse,
 )
 import asyncio
-
+from boto3.s3.transfer import TransferConfig
 from src.utils import (
     get_bucket_name,
     process_zip_with_shapefile,
@@ -86,6 +86,8 @@ router = APIRouter()
 
 # Create separate router for basemap endpoints
 basemap_router = APIRouter()
+
+one_shot_config = TransferConfig(multipart_threshold=5 * 1024**3)  # 5 GiB
 
 
 def generate_id(length=12, prefix=""):
@@ -1330,7 +1332,9 @@ async def internal_upload_layer(
                 temp_file_path = auxiliary_temp_file_path
 
             # Upload file to S3/MinIO
-            await s3_client.upload_file(temp_file_path, bucket_name, s3_key)
+            await s3_client.upload_file(
+                temp_file_path, bucket_name, s3_key, Config=one_shot_config
+            )
 
             # Get layer bounds using GDAL
             geometry_type = "unknown"
@@ -1674,7 +1678,9 @@ async def generate_pmtiles_for_layer(
             # Fallback to old path if user_id/project_id not available
             pmtiles_key = f"pmtiles/layer/{layer_id}.pmtiles"
         s3 = await get_async_s3_client()
-        await s3.upload_file(local_output_file, bucket_name, pmtiles_key)
+        await s3.upload_file(
+            local_output_file, bucket_name, pmtiles_key, Config=one_shot_config
+        )
 
         # Update the database with the PMTiles key
         async with get_async_db_connection() as conn:
