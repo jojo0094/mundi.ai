@@ -53,10 +53,6 @@ from src.postgis_tiles import fetch_mvt_tile
 from ..dependencies.layer_describer import LayerDescriber, get_layer_describer
 from ..dependencies.chat_completions import ChatArgsProvider, get_chat_args_provider
 from opentelemetry import trace
-from src.symbology.verify import (
-    StyleValidationError,
-    verify_style_json_str,
-)
 from src.dependencies.base_map import get_base_map_provider
 from src.utils import generate_id
 
@@ -1048,6 +1044,11 @@ async def set_layer_style(
                 status_code=400,
                 detail=f"Layer source must be '{layer_id}'",
             )
+
+    from src.symbology.verify import (
+        StyleValidationError,
+        verify_style_json_str,
+    )
 
     try:
         await verify_style_json_str(
