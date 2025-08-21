@@ -30,6 +30,14 @@ export default defineConfig({
 					items: [
 						{ label: 'Making your first map', slug: 'getting-started/making-your-first-map' },
 						{ label: 'Uploading files', slug: 'getting-started/uploading-files' },
+						{
+							label: 'Remote sources',
+							collapsed: true,
+							items: [
+								{ label: 'WFS', slug: 'getting-started/add-ogc-wfs-web-feature-service' },
+								{ label: 'Google Sheets', slug: 'getting-started/google-sheets' },
+							],
+						},
 					],
 				},
 				{
