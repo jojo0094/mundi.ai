@@ -1351,7 +1351,7 @@ async def internal_upload_layer(
                         "kml" if file_ext == ".kml" else "kmz"
                     )
 
-                except subprocess.CalledProcessError as e:
+                except subprocess.CalledProcessError:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="Failed to convert KML/KMZ to spatial format. Please check that the file is valid.",
@@ -1962,7 +1962,7 @@ async def add_remote_layer(
             ogr_source = auxiliary_temp_file_path
             file_ext = ".fgb"
 
-        except subprocess.CalledProcessError as e:
+        except subprocess.CalledProcessError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to convert remote file to optimized format. Please check that the URL is accessible and contains valid geospatial data.",
