@@ -35,6 +35,7 @@ export default defineConfig({
 							collapsed: true,
 							items: [
 								{ label: 'WFS', slug: 'getting-started/add-ogc-wfs-web-feature-service' },
+								{ label: 'ESRI Feature Server', slug: 'getting-started/esri-feature-server' },
 								{ label: 'Google Sheets', slug: 'getting-started/google-sheets' },
 							],
 						},
