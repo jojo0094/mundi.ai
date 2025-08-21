@@ -23,6 +23,7 @@ import { useNavigate } from 'react-router-dom';
 import { ReadyState } from 'react-use-websocket';
 import { toast } from 'sonner';
 import { AddRemoteDataSource } from '@/components/AddRemoteDataSource';
+import { ConnectESRIFeatureService } from '@/components/ConnectESRIFeatureService';
 import { ConnectGoogleSheets } from '@/components/ConnectGoogleSheets';
 import { ConnectWFS } from '@/components/ConnectWFS';
 import EditableTitle from '@/components/EditableTitle';
@@ -115,6 +116,7 @@ const LayerList: React.FC<LayerListProps> = ({
   const [showRemoteUrlDialog, setShowRemoteUrlDialog] = useState(false);
   const [showWFSDialog, setShowWFSDialog] = useState(false);
   const [showGoogleSheetsDialog, setShowGoogleSheetsDialog] = useState(false);
+  const [showESRIDialog, setShowESRIDialog] = useState(false);
   const [portError, setPortError] = useState<string | null>(null);
 
   const postgisConnectionMutation = useMutation({
@@ -668,6 +670,10 @@ const LayerList: React.FC<LayerListProps> = ({
                   <Sheet className="h-4 w-4 mr-2" />
                   Google Sheets
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowESRIDialog(true)} className="cursor-pointer">
+                  <Database className="h-4 w-4 mr-2" />
+                  ESRI Feature Service
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </TooltipProvider>
@@ -957,6 +963,12 @@ const LayerList: React.FC<LayerListProps> = ({
         <ConnectGoogleSheets
           isOpen={showGoogleSheetsDialog}
           onClose={() => setShowGoogleSheetsDialog(false)}
+          mapId={currentMapData?.map_id}
+          onSuccess={updateMapData}
+        />
+        <ConnectESRIFeatureService
+          isOpen={showESRIDialog}
+          onClose={() => setShowESRIDialog(false)}
           mapId={currentMapData?.map_id}
           onSuccess={updateMapData}
         />
