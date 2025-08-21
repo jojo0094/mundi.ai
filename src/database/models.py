@@ -214,7 +214,10 @@ class MapLayer(Base):
                     "SERVICE=WFS" in self.remote_url.upper()
                     and "REQUEST=GETFEATURE" in self.remote_url.upper()
                 ):
-                    yield self.remote_url  # Use WFS URL directly
+                    yield f"WFS:{self.remote_url}"  # Use WFS driver prefix
+                elif self.remote_url.startswith("CSV:/vsicurl/"):
+                    # CSV URLs are already prefixed, use as-is
+                    yield self.remote_url
                 else:
                     # Regular remote URL: use vsicurl
                     yield f"/vsicurl/{self.remote_url}"

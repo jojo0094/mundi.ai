@@ -910,7 +910,7 @@ async def describe_layer_internal(
         layer = await conn.fetchrow(
             """
             SELECT layer_id, name, type, metadata, bounds, geometry_type,
-                   created_on, last_edited, feature_count, s3_key,
+                   created_on, last_edited, feature_count, s3_key, remote_url,
                    postgis_query, postgis_connection_id
             FROM map_layers
             WHERE layer_id = $1

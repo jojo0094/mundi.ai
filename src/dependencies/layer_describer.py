@@ -18,14 +18,13 @@ import csv
 import fiona
 import io
 import json
-import os
-import tempfile
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from typing import Dict, Any, List
 
-from src.utils import get_async_s3_client, get_bucket_name
 from src.structures import get_async_db_connection
+
+fiona.drvsupport.supported_drivers["WFS"] = "r"
 
 
 class LayerDescriber(ABC):
@@ -210,27 +209,26 @@ class DefaultLayerDescriber(LayerDescriber):
             f"Last Edited: {str(layer_data['last_edited']) if layer_data['last_edited'] else 'Unknown'}"
         )
 
-        # TODO: Add proper remote source description
-        if layer_data.get("remote_url"):
-            markdown_content.append("Source: Remote")
-            return markdown_content
+        # Get layer object to use get_ogr_source method
+        from src.database.models import MapLayer
 
-        bucket_name = get_bucket_name()
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            s3_key = layer_data["s3_key"]
-            file_extension = os.path.splitext(s3_key)[1]
-
-            local_input_file = os.path.join(
-                temp_dir, f"layer_{layer_id}_input{file_extension}"
+        async with get_async_db_connection() as conn:
+            layer_row = await conn.fetchrow(
+                """
+                SELECT *
+                FROM map_layers
+                WHERE layer_id = $1
+                """,
+                layer_id,
             )
+            if not layer_row:
+                markdown_content.append("Error: Layer not found")
+                return markdown_content
+            layer = MapLayer(**dict(layer_row))
 
-            s3 = await get_async_s3_client()
-            await s3.download_file(bucket_name, s3_key, local_input_file)
-
-            with fiona.open(local_input_file) as src:
-                feature_count = len(src)
-                features = list(src)
+        async with await layer.get_ogr_source() as ogr_source:
+            with fiona.open(ogr_source) as src:
+                feature_count = layer_data["feature_count"] or len(src)
                 schema = src.schema
                 crs = src.crs
 
@@ -242,16 +240,18 @@ class DefaultLayerDescriber(LayerDescriber):
 
                 markdown_content.append("\n## Schema Information\n")
 
-                async with get_async_db_connection() as conn:
-                    await conn.execute(
-                        """
-                        UPDATE map_layers
-                        SET feature_count = $1
-                        WHERE layer_id = $2
-                        """,
-                        feature_count,
-                        layer_id,
-                    )
+                # Update database with feature count if it wasn't already set
+                if layer_data["feature_count"] is None:
+                    async with get_async_db_connection() as conn:
+                        await conn.execute(
+                            """
+                            UPDATE map_layers
+                            SET feature_count = $1
+                            WHERE layer_id = $2
+                            """,
+                            feature_count,
+                            layer_id,
+                        )
 
                 markdown_content.append(f"CRS: {crs.to_string() if crs else 'Unknown'}")
                 markdown_content.append(f"Driver: {src.driver}")
@@ -272,7 +272,9 @@ class DefaultLayerDescriber(LayerDescriber):
                     markdown_content.append("No attribute fields found.")
 
                 features_with_attrs = []
-                for i, feature in enumerate(features[:10]):
+                for i, feature in enumerate(src):
+                    if i >= 10:
+                        break
                     features_with_attrs.append(feature["properties"])
 
                 if features_with_attrs:

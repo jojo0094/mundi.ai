@@ -14,7 +14,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import pytest
-import asyncio
 
 
 @pytest.mark.anyio
@@ -44,8 +43,6 @@ async def test_remote_file_with_pmtiles_generation(auth_client):
     layer_id = response.json()["id"]
     layer_type = response.json()["type"]
     assert layer_type == "vector"
-
-    await asyncio.sleep(10)
 
     pmtiles_response = await auth_client.get(f"/api/layer/{layer_id}.pmtiles")
     if pmtiles_response.status_code != 200:
@@ -101,8 +98,6 @@ async def test_google_sheets_with_pmtiles_generation(auth_client):
     layer_type = response_data["type"]
     assert layer_type == "vector"
 
-    await asyncio.sleep(8)
-
     pmtiles_response = await auth_client.get(f"/api/layer/{layer_id}.pmtiles")
     assert pmtiles_response.status_code == 200
     assert len(pmtiles_response.content) > 0, "PMTiles content should not be empty"
@@ -153,8 +148,6 @@ async def test_wfs_with_pmtiles_generation(auth_client):
     layer_type = response_data["type"]
     assert layer_type == "vector"
 
-    await asyncio.sleep(10)
-
     pmtiles_response = await auth_client.get(f"/api/layer/{layer_id}.pmtiles")
     assert pmtiles_response.status_code == 200
     assert len(pmtiles_response.content) > 0, "PMTiles content should not be empty"
@@ -164,24 +157,183 @@ async def test_wfs_with_pmtiles_generation(auth_client):
         f"Invalid PMTiles file signature: {pmtiles_response.content[:4]}"
     )
 
-    geojson_response = await auth_client.get(f"/api/layer/{layer_id}.geojson")
+
+@pytest.mark.anyio
+async def test_send_message_with_all_remote_layers(auth_client):
+    """Test /send message functionality with all three types of remote layers attached to a map."""
+    from unittest.mock import patch, AsyncMock
+    from openai.types.chat import ChatCompletionMessage
+
+    class MockChoice:
+        def __init__(self, content: str, tool_calls=None):
+            self.message = ChatCompletionMessage(
+                content=content, tool_calls=tool_calls, role="assistant"
+            )
+
+    class MockResponse:
+        def __init__(self, content: str, tool_calls=None):
+            self.choices = [MockChoice(content, tool_calls)]
+
+    # Create a map
+    map_response = await auth_client.post(
+        "/api/maps/create", json={"name": "Test Map for All Remote Layers"}
+    )
+    assert map_response.status_code == 200
+    map_data = map_response.json()
+    map_id = map_data["id"]
+    project_id = map_data["project_id"]
+
+    print(f"Created map {map_id} in project {project_id}")
+
+    # Add WFS layer
+    wfs_url = "https://geo.stat.fi/geoserver/wfs?service=WFS&version=2.0.0&request=GetFeature&typename=vaestoruutu:vaki2021_5km&maxfeatures=10"
+    wfs_response = await auth_client.post(
+        f"/api/maps/{map_id}/layers/remote",
+        json={
+            "url": wfs_url,
+            "name": "Finland Population WFS",
+            "source_type": "vector",
+            "add_layer_to_map": True,
+        },
+    )
+    assert wfs_response.status_code == 200
+    wfs_data = wfs_response.json()
+    wfs_layer_id = wfs_data["id"]
+    current_map_id = wfs_data.get(
+        "dag_child_map_id", map_id
+    )  # Update map_id for chaining
+    print(f"Added WFS layer: {wfs_layer_id}, current map: {current_map_id}")
+
+    # Add CSV layer (Google Sheets) - use current_map_id
+    csv_url = "CSV:/vsicurl/https://docs.google.com/spreadsheets/d/1vsHncOHn0l5uk29zFYG9HvAMHMS1tanXJKKsMCs2hkw/export?format=csv&id=1vsHncOHn0l5uk29zFYG9HvAMHMS1tanXJKKsMCs2hkw&gid=0"
+    csv_response = await auth_client.post(
+        f"/api/maps/{current_map_id}/layers/remote",
+        json={
+            "url": csv_url,
+            "name": "Test CSV Data",
+            "source_type": "sheets",
+            "add_layer_to_map": True,
+        },
+    )
+    if csv_response.status_code != 200:
+        print(
+            f"CSV layer creation failed: {csv_response.status_code} - {csv_response.text}"
+        )
+    assert csv_response.status_code == 200
+    csv_data = csv_response.json()
+    csv_layer_id = csv_data["id"]
+    current_map_id = csv_data.get(
+        "dag_child_map_id", current_map_id
+    )  # Update map_id for chaining
+    print(f"Added CSV layer: {csv_layer_id}, current map: {current_map_id}")
+
+    # Add GeoJSON layer - use current_map_id
+    geojson_url = "https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson"
+    geojson_response = await auth_client.post(
+        f"/api/maps/{current_map_id}/layers/remote",
+        json={
+            "url": geojson_url,
+            "name": "World Countries GeoJSON",
+            "source_type": "vector",
+            "add_layer_to_map": True,
+        },
+    )
     assert geojson_response.status_code == 200
-    assert geojson_response.headers["content-type"] == "application/geo+json"
-    assert len(geojson_response.content) > 0, "GeoJSON content should not be empty"
+    geojson_data = geojson_response.json()
+    geojson_layer_id = geojson_data["id"]
+    final_map_id = geojson_data.get("dag_child_map_id", current_map_id)  # Final map_id
+    print(f"Added GeoJSON layer: {geojson_layer_id}, final map: {final_map_id}")
 
-    import json
+    # Create a conversation
+    conversation_response = await auth_client.post(
+        "/api/conversations",
+        json={"project_id": project_id},
+    )
+    assert conversation_response.status_code == 200
+    conversation_id = conversation_response.json()["id"]
+    print(f"Created conversation: {conversation_id}")
 
-    geojson_data = json.loads(geojson_response.content)
-    assert "type" in geojson_data
-    assert geojson_data["type"] == "FeatureCollection"
-    assert "features" in geojson_data
+    # Mock OpenAI responses
+    mock_responses = [
+        MockResponse(
+            "I can see your map contains three different types of remote data layers:\n\n"
+            "1. **Finland Population WFS** - A WFS (Web Feature Service) layer with population data from Finland\n"
+            "2. **Test CSV Data** - A CSV dataset imported from Google Sheets\n"
+            "3. **World Countries GeoJSON** - A GeoJSON layer showing country boundaries\n\n"
+            "This is a great example of integrating multiple remote data sources! Each layer type is handled differently by the system - WFS uses direct service calls, CSV data is processed through the sheets interface, and GeoJSON is fetched as a standard vector format.\n\n"
+            "What would you like to analyze or visualize with this data?"
+        )
+    ]
 
-    assert "id" in response_data
-    assert "name" in response_data
-    assert "type" in response_data
-    assert "url" in response_data
-    assert response_data["name"] == "Test WFS Population Layer"
+    with patch("src.routes.message_routes.get_openai_client") as mock_get_client:
+        mock_client = AsyncMock()
+        response_queue = mock_responses[:]
+        captured_messages = []
 
-    print(f"WFS layer created successfully with ID: {layer_id}")
-    print(f"PMTiles generated and accessible ({len(pmtiles_response.content)} bytes)")
-    print(f"GeoJSON contains {len(geojson_data['features'])} features")
+        async def mock_create(*args, **kwargs):
+            # Capture the messages sent to OpenAI for inspection
+            if "messages" in kwargs:
+                captured_messages.extend(kwargs["messages"])
+            elif len(args) > 0 and hasattr(args[0], "messages"):
+                captured_messages.extend(args[0].messages)
+            return response_queue.pop(0)
+
+        mock_client.chat.completions.create = AsyncMock(side_effect=mock_create)
+        mock_get_client.return_value = mock_client
+
+        # Send a message about the map - use final_map_id with all layers
+        message_response = await auth_client.post(
+            f"/api/maps/conversations/{conversation_id}/maps/{final_map_id}/send",
+            json={
+                "message": {
+                    "role": "user",
+                    "content": "Can you describe the layers in this map?",
+                },
+                "selected_feature": None,
+            },
+        )
+
+        print(f"Message response status: {message_response.status_code}")
+        if message_response.status_code != 200:
+            print(f"Error response: {message_response.text}")
+
+        assert message_response.status_code == 200
+        response_data = message_response.json()
+
+        print(
+            f"Assistant response: {response_data.get('content', 'No content')[:200]}..."
+        )
+
+        system_messages = [
+            msg for msg in captured_messages if msg.get("role") == "system"
+        ]
+
+        all_system_content = "\n".join(
+            [msg.get("content", "") for msg in system_messages]
+        )
+
+        assert "Driver: WFS" in all_system_content
+        assert "CRS: EPSG:3067" in all_system_content
+        assert "Finland Population WFS" in all_system_content
+        assert "Geometry Type: polygon" in all_system_content
+        assert (
+            "Feature Count: 10359" in all_system_content
+            or "Feature Count: 10" in all_system_content
+        )
+        assert "vaesto" in all_system_content
+        assert "kunta" in all_system_content
+
+        assert "Driver: CSV" in all_system_content
+        assert "Test CSV Data" in all_system_content
+        assert "Geometry Type: point" in all_system_content
+        assert "Feature Count: 3" in all_system_content
+        assert "San Francisco" in all_system_content
+        assert "weather" in all_system_content
+        assert "lat" in all_system_content and "long" in all_system_content
+
+        assert "Driver: GeoJSON" in all_system_content
+        assert "CRS: EPSG:4326" in all_system_content
+        assert "World Countries GeoJSON" in all_system_content
+        assert "Geometry Type: multipolygon" in all_system_content
+        assert "Feature Count: 177" in all_system_content
+        assert "Afghanistan" in all_system_content

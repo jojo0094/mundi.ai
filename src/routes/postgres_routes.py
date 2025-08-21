@@ -75,6 +75,11 @@ from opentelemetry import trace
 from src.dag import DAGEditOperationResponse
 from src.dependencies.dag import get_map, get_layer
 
+import fiona
+
+fiona.drvsupport.supported_drivers["WFS"] = "r"
+
+
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
@@ -1881,8 +1886,6 @@ async def add_remote_layer(
         if file_ext != ".csv" and not request.url.startswith("CSV:"):
             # For non-CSV files, check if they have existing geometry
             try:
-                import fiona
-
                 with fiona.open(ogr_source) as collection:
                     # Check if schema has geometry field
                     if not collection.schema or "geometry" not in collection.schema:
@@ -2188,8 +2191,6 @@ async def get_layer_bounds_and_metadata(
 
         elif layer_type == "vector":
             # Use Fiona for vector bounds and metadata extraction
-            import fiona
-
             with fiona.open(ogr_source) as collection:
                 # Get bounds and feature count
                 bounds = list(collection.bounds)
