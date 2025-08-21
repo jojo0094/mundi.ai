@@ -241,8 +241,31 @@ async def test_send_message_with_all_remote_layers(auth_client):
     assert geojson_response.status_code == 200
     geojson_data = geojson_response.json()
     geojson_layer_id = geojson_data["id"]
-    final_map_id = geojson_data.get("dag_child_map_id", current_map_id)  # Final map_id
-    print(f"Added GeoJSON layer: {geojson_layer_id}, final map: {final_map_id}")
+    current_map_id = geojson_data.get(
+        "dag_child_map_id", current_map_id
+    )  # Update map_id for chaining
+    print(f"Added GeoJSON layer: {geojson_layer_id}, current map: {current_map_id}")
+
+    # Add ESRI Feature Service layer - use current_map_id
+    esri_url = "https://sampleserver6.arcgisonline.com/arcgis/rest/services/PoolPermits/FeatureServer/0/query?f=pjson&resultRecordCount=10"
+    esri_response = await auth_client.post(
+        f"/api/maps/{current_map_id}/layers/remote",
+        json={
+            "url": esri_url,
+            "name": "Pool Permits ESRI FS",
+            "source_type": "vector",
+            "add_layer_to_map": True,
+        },
+    )
+    if esri_response.status_code != 200:
+        print(
+            f"ESRI layer creation failed: {esri_response.status_code} - {esri_response.text}"
+        )
+    assert esri_response.status_code == 200
+    esri_data = esri_response.json()
+    esri_layer_id = esri_data["id"]
+    final_map_id = esri_data.get("dag_child_map_id", current_map_id)  # Final map_id
+    print(f"Added ESRI layer: {esri_layer_id}, final map: {final_map_id}")
 
     # Create a conversation
     conversation_response = await auth_client.post(
@@ -256,11 +279,12 @@ async def test_send_message_with_all_remote_layers(auth_client):
     # Mock OpenAI responses
     mock_responses = [
         MockResponse(
-            "I can see your map contains three different types of remote data layers:\n\n"
+            "I can see your map contains four different types of remote data layers:\n\n"
             "1. **Finland Population WFS** - A WFS (Web Feature Service) layer with population data from Finland\n"
             "2. **Test CSV Data** - A CSV dataset imported from Google Sheets\n"
-            "3. **World Countries GeoJSON** - A GeoJSON layer showing country boundaries\n\n"
-            "This is a great example of integrating multiple remote data sources! Each layer type is handled differently by the system - WFS uses direct service calls, CSV data is processed through the sheets interface, and GeoJSON is fetched as a standard vector format.\n\n"
+            "3. **World Countries GeoJSON** - A GeoJSON layer showing country boundaries\n"
+            "4. **USGS Earthquakes ESRI FS** - An ESRI Feature Service layer with earthquake data from USGS\n\n"
+            "This is a great example of integrating multiple remote data sources! Each layer type is handled differently by the system - WFS uses direct service calls, CSV data is processed through the sheets interface, GeoJSON is fetched as a standard vector format, and ESRI Feature Services use the ESRI JSON driver.\n\n"
             "What would you like to analyze or visualize with this data?"
         )
     ]
@@ -337,3 +361,99 @@ async def test_send_message_with_all_remote_layers(auth_client):
         assert "Geometry Type: multipolygon" in all_system_content
         assert "Feature Count: 177" in all_system_content
         assert "Afghanistan" in all_system_content
+
+        # Test ESRI Feature Service layer description
+        assert "Pool Permits" in all_system_content
+        assert "Feature Count: 983" in all_system_content
+        assert "Dataset Bounds: -117.46"
+        assert "apn" in all_system_content
+        assert "Driver: ESRIJSON" in all_system_content
+
+
+@pytest.mark.anyio
+async def test_esri_feature_service_with_pmtiles_generation(auth_client):
+    """Test ESRI Feature Service processing with PMTiles generation."""
+    # Use the pool permits URL that works reliably
+    esri_url = "https://sampleserver6.arcgisonline.com/arcgis/rest/services/PoolPermits/FeatureServer/0/query?resultRecordCount=10&f=pjson"
+
+    map_response = await auth_client.post(
+        "/api/maps/create", json={"name": "Test Map for ESRI Feature Service"}
+    )
+    assert map_response.status_code == 200
+    map_id = map_response.json()["id"]
+
+    response = await auth_client.post(
+        f"/api/maps/{map_id}/layers/remote",
+        json={
+            "url": esri_url,
+            "name": "Test ESRI Feature Service Layer",
+            "source_type": "vector",
+        },
+    )
+
+    if response.status_code != 200:
+        print(f"Error response: {response.status_code} - {response.text}")
+    assert response.status_code == 200
+
+    layer_id = response.json()["id"]
+    layer_type = response.json()["type"]
+    assert layer_type == "vector"
+
+    # Test that PMTiles were generated
+    pmtiles_response = await auth_client.get(f"/api/layer/{layer_id}.pmtiles")
+    if pmtiles_response.status_code != 200:
+        print(
+            f"PMTiles request failed: {pmtiles_response.status_code} - {pmtiles_response.text}"
+        )
+    assert pmtiles_response.status_code == 200
+    assert len(pmtiles_response.content) > 0, "PMTiles content should not be empty"
+
+    # PMTiles v3 format starts with 'PMTi' (0x504d5469)
+    assert pmtiles_response.content[:4] == b"PMTi", (
+        f"Invalid PMTiles file signature: {pmtiles_response.content[:4]}"
+    )
+
+    print(f"ESRI Feature Service test passed. Layer ID: {layer_id}")
+    print(
+        f"PMTiles generated successfully, size: {len(pmtiles_response.content)} bytes"
+    )
+
+
+@pytest.mark.anyio
+async def test_esri_url_with_frontend_transformation(auth_client):
+    """Test ESRI Feature Service with frontend-style URL transformation."""
+    # Use pool permits URL which is known to work reliably
+    esri_url_with_limit = "https://sampleserver6.arcgisonline.com/arcgis/rest/services/PoolPermits/FeatureServer/0/query?f=pjson&resultRecordCount=10"
+
+    map_response = await auth_client.post(
+        "/api/maps/create", json={"name": "Test Map for ESRI with Limit"}
+    )
+    assert map_response.status_code == 200
+    map_id = map_response.json()["id"]
+
+    response = await auth_client.post(
+        f"/api/maps/{map_id}/layers/remote",
+        json={
+            "url": esri_url_with_limit,
+            "name": "Pool Permits Test",
+            "source_type": "vector",
+        },
+    )
+
+    print(f"Response status: {response.status_code}")
+    if response.status_code != 200:
+        print(f"Response text: {response.text}")
+
+    assert response.status_code == 200, "URL with resultRecordCount should work"
+
+    layer_id = response.json()["id"]
+
+    # Test PMTiles generation
+    pmtiles_response = await auth_client.get(f"/api/layer/{layer_id}.pmtiles")
+    assert pmtiles_response.status_code == 200
+    assert len(pmtiles_response.content) > 0
+
+    print(f"✅ Pool permits ESRI service works. Layer ID: {layer_id}")
+    print(
+        f"✅ PMTiles generated successfully, size: {len(pmtiles_response.content)} bytes"
+    )

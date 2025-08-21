@@ -1740,9 +1740,10 @@ async def add_remote_layer(
     - Remote vector files (GeoJSON, Shapefile, etc.)
     - Google Sheets (CSV export format)
     - WFS services (Web Feature Service)
+    - ESRI Feature Services and Map Services
     - Any OGR/GDAL compatible URL
 
-    The remote data is accessed via OGR's vsicurl virtual file system,
+    The remote data is accessed via OGR's vsicurl virtual file system or appropriate drivers,
     allowing efficient access to cloud-optimized formats without downloading the entire file.
     """
 
@@ -1868,6 +1869,12 @@ async def add_remote_layer(
         # For WFS sources, we work directly with the remote URL
         file_ext = ".gml"  # WFS typically returns GML
         ogr_source = request.url  # Use the WFS URL directly
+    elif (
+        "/FeatureServer" in request.url or "/MapServer" in request.url
+    ) and "/query" in request.url:
+        # For ESRI Feature Service or Map Service URLs - use ESRIJSON driver with prefix
+        file_ext = ".geojson"  # ESRI services return GeoJSON-like data
+        ogr_source = f"ESRIJSON:{request.url}"  # Use ESRIJSON driver prefix
     else:
         # Save downloaded content to temporary file for processing
         import os

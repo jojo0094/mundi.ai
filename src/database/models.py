@@ -218,6 +218,12 @@ class MapLayer(Base):
                 elif self.remote_url.startswith("CSV:/vsicurl/"):
                     # CSV URLs are already prefixed, use as-is
                     yield self.remote_url
+                elif (
+                    "/FeatureServer" in self.remote_url
+                    or "/MapServer" in self.remote_url
+                ) and "/query" in self.remote_url:
+                    # ESRI Feature Service or Map Service URLs - use ESRIJSON driver with prefix
+                    yield f"ESRIJSON:{self.remote_url}"
                 else:
                     # Regular remote URL: use vsicurl
                     yield f"/vsicurl/{self.remote_url}"
