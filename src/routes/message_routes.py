@@ -448,37 +448,19 @@ async def run_geoprocessing_tool(
                 if key == "OUTPUT":
                     continue
                 elif is_layer_id(val):
-                    # TODO: fetch type, and if its postgis, fetch the value from postgis
-                    # This is a layer ID, get the S3 key from database and create presigned URL
-                    layer_data = await conn.fetchrow(
-                        """
-                        SELECT s3_key, type FROM map_layers
-                        WHERE layer_id = $1 AND owner_uuid = $2
-                        """,
-                        val,
-                        user_id,
-                    )
-
-                    if not layer_data or not layer_data["s3_key"]:
+                    # Get OGR source for any layer type (S3, remote URL, PostGIS)
+                    try:
+                        layer = await get_layer(val, user_id)
+                        ogr_source_context = await layer.get_ogr_source(
+                            never_return_local_file=True
+                        )
+                        async with ogr_source_context as ogr_source:
+                            input_urls[key] = ogr_source
+                    except Exception as e:
                         raise RecoverableToolCallError(
-                            f"Layer {val} not found or has no S3 key",
+                            f"Layer {val} could not be accessed for geoprocessing",
                             tool_call.id,
                         )
-
-                    if layer_data["type"] == "postgis":
-                        raise RecoverableToolCallError(
-                            f"Layer {val} is from a PostGIS connection, not yet supported by geoprocessing",
-                            tool_call.id,
-                        )
-
-                    s3_client = await get_async_s3_client()
-                    bucket_name = get_bucket_name()
-                    presigned_url = await s3_client.generate_presigned_url(
-                        "get_object",
-                        Params={"Bucket": bucket_name, "Key": layer_data["s3_key"]},
-                        ExpiresIn=3600,
-                    )
-                    input_urls[key] = presigned_url
                 else:
                     input_params[key] = str(val)
 

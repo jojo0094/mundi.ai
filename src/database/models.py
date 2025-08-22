@@ -194,12 +194,16 @@ class MapLayer(Base):
         if self.metadata is not None:
             return json.loads(self.metadata)
 
-    async def get_ogr_source(self):
+    async def get_ogr_source(self, never_return_local_file: bool = False):
         """Return OGR-compatible source string for this layer
 
         For remote URLs, returns the /vsicurl/ path directly.
-        For S3 storage, downloads to a temporary file and yields the local path.
+        For S3 storage, downloads to a temporary file and yields the local path,
+        unless never_return_local_file=True, in which case returns presigned URL.
         Use as an async context manager to ensure cleanup.
+
+        Args:
+            never_return_local_file: If True, return presigned URLs for S3 instead of downloading
         """
         from contextlib import asynccontextmanager
         import tempfile
@@ -228,25 +232,38 @@ class MapLayer(Base):
                     # Regular remote URL: use vsicurl
                     yield f"/vsicurl/{self.remote_url}"
             else:
-                # S3 storage: download to temporary file
+                # S3 storage: either download to temp file or return presigned URL
                 from src.utils import get_async_s3_client, get_bucket_name
 
                 s3_client = await get_async_s3_client()
                 bucket_name = get_bucket_name()
 
-                # Create temporary file with appropriate extension
-                file_ext = os.path.splitext(self.s3_key)[1] if self.s3_key else ""
-                with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as tmp:
-                    temp_path = tmp.name
+                if never_return_local_file:
+                    # Generate presigned GET URL for remote access
+                    presigned_url = await s3_client.generate_presigned_url(
+                        "get_object",
+                        Params={"Bucket": bucket_name, "Key": self.s3_key},
+                        ExpiresIn=3600,
+                    )
+                    yield presigned_url
+                else:
+                    # Download to temporary file for local access
+                    file_ext = os.path.splitext(self.s3_key)[1] if self.s3_key else ""
+                    with tempfile.NamedTemporaryFile(
+                        suffix=file_ext, delete=False
+                    ) as tmp:
+                        temp_path = tmp.name
 
-                try:
-                    # Download S3 file to temporary location
-                    await s3_client.download_file(bucket_name, self.s3_key, temp_path)
-                    yield temp_path
-                finally:
-                    # Clean up temporary file
-                    if os.path.exists(temp_path):
-                        os.unlink(temp_path)
+                    try:
+                        # Download S3 file to temporary location
+                        await s3_client.download_file(
+                            bucket_name, self.s3_key, temp_path
+                        )
+                        yield temp_path
+                    finally:
+                        # Clean up temporary file
+                        if os.path.exists(temp_path):
+                            os.unlink(temp_path)
 
         return _source_context()
 
