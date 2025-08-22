@@ -228,7 +228,14 @@ class DefaultLayerDescriber(LayerDescriber):
 
         async with await layer.get_ogr_source() as ogr_source:
             with fiona.open(ogr_source) as src:
-                feature_count = layer_data["feature_count"] or len(src)
+                if layer_data["feature_count"]:
+                    feature_count = layer_data["feature_count"]
+                else:
+                    try:
+                        feature_count = len(src)
+                    except TypeError:
+                        # Some layer types don't support counting
+                        feature_count = None
                 schema = src.schema
                 crs = src.crs
 
@@ -240,8 +247,8 @@ class DefaultLayerDescriber(LayerDescriber):
 
                 markdown_content.append("\n## Schema Information\n")
 
-                # Update database with feature count if it wasn't already set
-                if layer_data["feature_count"] is None:
+                # Update database with feature count if it wasn't already set and we successfully got a count
+                if layer_data["feature_count"] is None and feature_count is not None:
                     async with get_async_db_connection() as conn:
                         await conn.execute(
                             """
@@ -286,9 +293,14 @@ class DefaultLayerDescriber(LayerDescriber):
 
                     markdown_content.append("\n## Sampled Features Attribute Table\n")
 
-                    markdown_content.append(
-                        f"\nRandomly sampled {len(features_with_attrs)} of {feature_count} features for this table."
-                    )
+                    if feature_count is not None:
+                        markdown_content.append(
+                            f"\nRandomly sampled {len(features_with_attrs)} of {feature_count} features for this table."
+                        )
+                    else:
+                        markdown_content.append(
+                            f"\nRandomly sampled {len(features_with_attrs)} features for this table."
+                        )
 
                     csv_output = io.StringIO()
                     writer = csv.DictWriter(csv_output, fieldnames=fieldnames)
