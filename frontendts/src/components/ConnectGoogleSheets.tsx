@@ -2,6 +2,7 @@
 
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import React, { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -78,6 +79,8 @@ interface ConnectGoogleSheetsProps {
 }
 
 export const ConnectGoogleSheets: React.FC<ConnectGoogleSheetsProps> = ({ isOpen, onClose, mapId, onSuccess }) => {
+  const navigate = useNavigate();
+  const { projectId } = useParams<{ projectId: string }>();
   const [layerName, setLayerName] = useState('');
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
@@ -128,9 +131,17 @@ export const ConnectGoogleSheets: React.FC<ConnectGoogleSheetsProps> = ({ isOpen
       });
 
       if (response.ok) {
+        const data = await response.json();
         toast.success('Google Sheets layer added successfully!');
         handleClose();
         onSuccess?.();
+
+        // Navigate to the new child map if dag_child_map_id is present
+        if (data.dag_child_map_id && projectId) {
+          setTimeout(() => {
+            navigate(`/project/${projectId}/${data.dag_child_map_id}`);
+          }, 1000);
+        }
       } else {
         const errorData = await response.json().catch(() => ({ detail: response.statusText }));
         setError(errorData.detail || response.statusText);
