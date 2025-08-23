@@ -456,7 +456,7 @@ async def run_geoprocessing_tool(
                         )
                         async with ogr_source_context as ogr_source:
                             input_urls[key] = ogr_source
-                    except Exception as e:
+                    except Exception:
                         raise RecoverableToolCallError(
                             f"Layer {val} could not be accessed for geoprocessing",
                             tool_call.id,

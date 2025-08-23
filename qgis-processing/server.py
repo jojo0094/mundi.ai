@@ -67,7 +67,7 @@ def run_qgis_process(request: QGISProcessRequest) -> Dict[str, Any]:
                             status_code=400,
                             detail={
                                 "error": "Invalid Input URL",
-                                "message": f"Input URL basename must have a file extension",
+                                "message": "Input URL basename must have a file extension",
                             },
                         )
 
@@ -77,12 +77,12 @@ def run_qgis_process(request: QGISProcessRequest) -> Dict[str, Any]:
                         with urlopen(url) as response:
                             with open(local_path, "wb") as f:
                                 f.write(response.read())
-                    except (HTTPError, URLError) as e:
+                    except (HTTPError, URLError):
                         raise HTTPException(
                             status_code=400,
                             detail={
                                 "error": "Failed to download input file",
-                                "message": f"Could not download from URL",
+                                "message": "Could not download from URL",
                             },
                         )
 
