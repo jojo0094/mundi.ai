@@ -579,7 +579,7 @@ async def run_geoprocessing_tool(
                         map_id=map_id,
                         file=upload_file,
                         layer_name=filename,
-                        add_layer_to_map=True,
+                        add_layer_to_map=False,
                         user_id=user_id,
                         project_id=project_id,
                     )
@@ -601,6 +601,16 @@ async def run_geoprocessing_tool(
                     "qgis_result": qgis_result,
                     "created_layers": created_layers,
                 }
+
+                # Add instructions about available layers
+                if created_layers:
+                    layer_names = [layer["layer_name"] for layer in created_layers]
+                    layer_ids = [layer["layer_id"] for layer in created_layers]
+                    result["kue_instructions"] = (
+                        f"New layers available: {', '.join(layer_names)} "
+                        f"(IDs: {', '.join(layer_ids)}), not added to map. "
+                        'Use "add_layer_to_map" with the layer_id and descriptive new_name for layers that should be visible to the user. DO NOT include feature count or CRS in name, those are already visible to the user.'
+                    )
 
                 return result
 
