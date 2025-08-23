@@ -21,28 +21,26 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useProjects } from '@/contexts/ProjectsContext';
 import { ScheduleCallButton } from '@/lib/ee-loader';
-import type { MapProject, ProjectState } from '@/lib/types';
+import type { MapProject } from '@/lib/types';
 import { formatRelativeTime } from '@/lib/utils';
 
-export function AppSidebar({ projects }: { projects: ProjectState }) {
+export function AppSidebar() {
   const sessionContext = Session.useSessionContext();
   const { state, toggleSidebar } = useSidebar();
+  const { allProjects, allProjectsLoading } = useProjects();
 
   async function onLogout() {
     await signOut();
     window.location.href = '/auth'; // or redirect to wherever the login page is
   }
 
-  let recentProjects: MapProject[] = [];
-  if (projects.type === 'loaded') {
-    recentProjects = projects.projects
-      .sort(
-        (a, b) =>
-          new Date(b.most_recent_version?.last_edited || '').getTime() - new Date(a.most_recent_version?.last_edited || '').getTime(),
-      )
-      .slice(0, 3);
-  }
+  const recentProjects: MapProject[] = allProjects
+    .sort(
+      (a, b) => new Date(b.most_recent_version?.last_edited || '').getTime() - new Date(a.most_recent_version?.last_edited || '').getTime(),
+    )
+    .slice(0, 3);
 
   return (
     <Sidebar collapsible="icon" data-theme="light" className="border-none">
@@ -97,7 +95,7 @@ export function AppSidebar({ projects }: { projects: ProjectState }) {
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                {projects.type === 'loaded' && state === 'expanded' && (
+                {!allProjectsLoading && state === 'expanded' && (
                   <>
                     {recentProjects.map((project) => (
                       <SidebarMenuItem key={project.id}>
