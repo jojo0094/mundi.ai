@@ -35,6 +35,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ShareEmbedModal } from '@/lib/ee-loader';
+import type { ErrorEntry } from '../lib/frontend-types';
 import type { EphemeralAction, MapData, MapLayer, MapProject } from '../lib/types';
 
 interface UploadingFile {
@@ -69,6 +70,7 @@ interface LayerListProps {
   demoConfig: { available: boolean; description: string };
   hiddenLayerIDs: string[];
   toggleLayerVisibility: (layerId: string) => void;
+  errors: ErrorEntry[];
 }
 
 const LayerList: React.FC<LayerListProps> = ({
@@ -91,10 +93,16 @@ const LayerList: React.FC<LayerListProps> = ({
   demoConfig,
   hiddenLayerIDs,
   toggleLayerVisibility,
+  errors,
 }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showPostgisDialog, setShowPostgisDialog] = useState(false);
+
+  // Helper function to get errors for a specific source/layer ID
+  const getLayerErrors = (layerId: string): ErrorEntry[] => {
+    return errors.filter((error) => error.sourceId === layerId);
+  };
 
   // Component to render legend symbol for a layer
   const LayerLegendSymbol = ({ layerDetails }: { layerDetails: MapLayer }) => {
@@ -324,11 +332,28 @@ const LayerList: React.FC<LayerListProps> = ({
 
               const hoverText = layerDetails.type === 'raster' ? undefined : sridDisplay;
 
+              // Check for errors associated with this layer
+              const layerErrors = getLayerErrors(layerDetails.id);
+              const hasErrors = layerErrors.length > 0;
+
+              const getNameClassName = () => {
+                if (hiddenLayerIDs.includes(layerDetails.id)) {
+                  return 'line-through text-gray-400';
+                }
+                if (hasErrors) {
+                  return 'text-red-300';
+                }
+                return '';
+              };
+
+              // Create title text from error messages if any
+              const errorTitle = hasErrors ? layerErrors.map((error) => error.message).join(' | ') : undefined;
+
               return (
                 <li key={layerDetails.id}>
                   <LayerListItem
                     name={layerDetails.name}
-                    nameClassName={hiddenLayerIDs.includes(layerDetails.id) ? 'line-through text-gray-400' : ''}
+                    nameClassName={getNameClassName()}
                     status={status}
                     isActive={hasActiveAction}
                     hoverText={hoverText}
@@ -337,6 +362,7 @@ const LayerList: React.FC<LayerListProps> = ({
                     displayAsDiff={currentMapData.display_as_diff}
                     layerId={layerDetails.id}
                     isVisible={!hiddenLayerIDs.includes(layerDetails.id)}
+                    title={errorTitle}
                     onToggleVisibility={(layerId) => {
                       toggleLayerVisibility(layerId);
                     }}

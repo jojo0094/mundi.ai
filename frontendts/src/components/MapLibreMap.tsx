@@ -258,7 +258,7 @@ interface MapLibreMapProps {
   zoomHistory: Array<{ bounds: [number, number, number, number] }>;
   zoomHistoryIndex: number;
   setZoomHistoryIndex: React.Dispatch<React.SetStateAction<number>>;
-  addError: (message: string, shouldOverrideMessages?: boolean) => void;
+  addError: (message: string, shouldOverrideMessages?: boolean, sourceId?: string) => void;
   dismissError: (errorId: string) => void;
   errors: ErrorEntry[];
   invalidateMapData: () => void;
@@ -797,7 +797,8 @@ export default function MapLibreMap({
           }
         } else {
           // Unknown type of error?
-          addError('Error loading map data: ' + e.error.message, true);
+          const sourceId = 'sourceId' in e && typeof e.sourceId === 'string' ? e.sourceId : undefined;
+          addError('Error loading map data: ' + e.error.message, true, sourceId);
         }
       });
 
@@ -1191,6 +1192,7 @@ export default function MapLibreMap({
             demoConfig={demoConfig}
             hiddenLayerIDs={hiddenLayerIDs}
             toggleLayerVisibility={toggleLayerVisibility}
+            errors={errors}
           />
         )}
         {selectedFeature && (
