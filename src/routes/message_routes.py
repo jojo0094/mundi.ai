@@ -53,7 +53,6 @@ from src.routes.layer_router import (
     set_layer_style as set_layer_style_route,
     SetStyleRequest,
 )
-from src.dependencies.dag import get_layer
 from src.structures import (
     async_conn,
     SanitizedMessage,
@@ -443,7 +442,7 @@ async def run_geoprocessing_tool(
         try:
             async with kue_ephemeral_action(
                 conversation_id, f"QGIS running {algorithm_id}..."
-            ):
+            ), async_conn("get_layer_for_geoprocessing") as conn:
                 input_params = {}
                 input_urls = {}
 
@@ -453,7 +452,19 @@ async def run_geoprocessing_tool(
                     elif is_layer_id(val):
                         # Get OGR source for any layer type (S3, remote URL, PostGIS)
                         try:
-                            layer = await get_layer(val, user_id)
+                            layer_row = await conn.fetchrow(
+                                """
+                                SELECT *
+                                FROM map_layers
+                                WHERE layer_id = $1 AND owner_uuid = $2
+                                """,
+                                val,
+                                user_id,
+                            )
+                            if not layer_row:
+                                raise HTTPException(404, f"Layer {val} not found")
+                            layer = MapLayer(**dict(layer_row))
+
                             ogr_source_context = await layer.get_ogr_source(
                                 never_return_local_file=True
                             )
@@ -1474,7 +1485,20 @@ async def process_chat_interaction_task(
                                 try:
                                     layers = json.loads(maplibre_json_layers_str)
 
-                                    layer = await get_layer(layer_id, user_id)
+                                    layer_row = await conn.fetchrow(
+                                        """
+                                        SELECT *
+                                        FROM map_layers
+                                        WHERE layer_id = $1 AND owner_uuid = $2
+                                        """,
+                                        layer_id,
+                                        user_id,
+                                    )
+                                    if not layer_row:
+                                        raise HTTPException(
+                                            404, f"Layer {layer_id} not found"
+                                        )
+                                    layer = MapLayer(**dict(layer_row))
 
                                     async with kue_ephemeral_action(
                                         conversation.id,

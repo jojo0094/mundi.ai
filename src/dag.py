@@ -45,4 +45,3 @@ class ForkReason(Enum):
 
     USER_EDIT = "user_edit"
     AI_EDIT = "ai_edit"
-
