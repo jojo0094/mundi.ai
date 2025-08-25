@@ -63,3 +63,6 @@ Zoom in to see the individual grid cells, and click on any feature to open a
 popup displaying its attributes.
 
 ![selected feature from WFS service in Mundi](../../../assets/cloud-sources/selected-wfs-feature.jpg)
+
+For further education, a good resource for trying out this WFS server
+is the [Gispo tutorial on WFS](https://www.gispo.fi/en/blog/how-to-use-wfs-in-qgis/).
