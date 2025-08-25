@@ -6,6 +6,7 @@ import MDarkSvg from '@/assets/M-dark.svg';
 import MLightSvg from '@/assets/M-light.svg';
 import MundiDarkSvg from '@/assets/Mundi-dark.svg';
 import MundiLightSvg from '@/assets/Mundi-light.svg';
+import BuntingBirdSvg from '@/assets/bunting_bird.svg';
 import { Button } from '@/components/ui/button';
 import {
   Sidebar,
@@ -194,7 +195,7 @@ export function AppSidebar() {
         <div className="text-center">
           <a href="https://buntinglabs.com" target="_blank" className="text-muted-foreground text-xs hover:underline">
             {state === 'collapsed' ? (
-              <img src="/public/bunting_bird.svg" alt="Bunting Labs" className="w-6 h-6 mx-auto my-2" />
+              <img src={BuntingBirdSvg} alt="Bunting Labs" className="w-6 h-6 mx-auto my-2" />
             ) : (
               '© Bunting Labs, Inc. 2025'
             )}
