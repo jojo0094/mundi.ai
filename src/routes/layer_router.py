@@ -34,7 +34,6 @@ from ..dependencies.session import (
     session_user_id,
     UserContext,
 )
-from ..utils import get_openai_client
 import logging
 import re
 from redis import Redis
@@ -45,13 +44,10 @@ from src.utils import (
     get_bucket_name,
     get_async_s3_client,
 )
-import duckdb
 import subprocess
-from src.duckdb import execute_duckdb_query
 from src.structures import get_async_db_connection, async_conn
 from src.postgis_tiles import fetch_mvt_tile
 from ..dependencies.layer_describer import LayerDescriber, get_layer_describer
-from ..dependencies.chat_completions import ChatArgsProvider, get_chat_args_provider
 from opentelemetry import trace
 from src.dependencies.base_map import get_base_map_provider
 from src.utils import generate_id
@@ -736,146 +732,6 @@ async def get_layer_geojson(
                 "Cache-Control": "public, max-age=86400",  # Cache for 24 hours
             },
         )
-
-
-KUE_SQL_SYSTEM_PROMPT = """
-You are an AI assistant that is converting natural language queries to SQL for DuckDB with spatial extension.
-The user is viewing a GIS attribute table, and will type ad-hoc into an input text box. You are to
-write a DuckDB SQL query that will automatically be executed and the results will be shown to them in
-the attribute table. DuckDB is read-only.
-
-<QueryInstructions>
-In your SELECT statement, list out the columns explicitly, most important first. DO NOT `SELECT * FROM ...`.
-This is because the user has limited screen space, and some columns are more interesting than others.
-
-ONLY quote column names that have colons in them, e.g. "name:en" vs CountryCode (no quotes).
-
-If the user message is empty, give a SQL query that would best display table data.
-Generally limit your SQL query to 6 columns, as more is too much to display.
-
-DO NOT INCLUDE Geometry / geom columns in the SELECT statement.
-</QueryInstructions>
-
-<Columns>
-Shape__Area and Shape__Length are generally useless unless the user asks for them.
-</Columns>
-
-<ResponseFormat>
-Begin IMMEDIATELY with SQL.
-NEVER preface or suffix with English.
-NEVER use ` or ``` to begin the SQL.
-NEVER add comments like #, --, //, or /*.
-
-Use newlines to wrap text at 80 characters and use tabs to indent semantically.
-However, do not put each column on a new line, as it takes up too much vertical height.
-This is the perfect sweet spot:
-
-SELECT foo, bar, baz
-FROM FROM Lexample
-WHERE col LIKE '%test%'
-    AND baz = 'qux'
-LIMIT 10;
-
-</ResponseFormat>
-"""
-
-
-class LayerQueryRequest(BaseModel):
-    natural_language_query: str
-    max_n_rows: int = 20
-
-
-@layer_router.post(
-    "/layer/{layer_id}/query",
-    operation_id="query_layer",
-)
-async def query_layer(
-    request: Request,
-    body: LayerQueryRequest,
-    layer: MapLayer = Depends(get_layer),
-    session: UserContext = Depends(verify_session_required),
-    layer_describer: LayerDescriber = Depends(get_layer_describer),
-    chat_args: ChatArgsProvider = Depends(get_chat_args_provider),
-):
-    natural_language_query = body.natural_language_query
-    max_n_rows = min(body.max_n_rows, 25)  # Cap at 25 rows
-
-    # Check if schema info is cached in Redis
-    schema_info = redis.get(f"vector_schema:{layer.layer_id}:duckdb")
-    if not schema_info:
-        # ~0.5 seconds
-        schema_info = await describe_layer_internal(
-            layer.layer_id, layer_describer, session.get_user_id()
-        )
-
-        # 5 minute expiry
-        redis.set(
-            f"vector_schema:{layer.layer_id}:duckdb",
-            schema_info,
-            ex=5 * 60,
-        )
-
-    # Generate SQL from natural language query using async client
-    client = get_openai_client(request)
-
-    sql_messages = [
-        {
-            "role": "system",
-            "content": KUE_SQL_SYSTEM_PROMPT,
-        },
-        {
-            "role": "system",
-            "content": f"""
-The table name representing the layer is {layer.layer_id}.
-
-The column names are from "Attribute Fields" in the table schema.
-DO NOT select column names that are not listed. Do not assume there
-is a primary key column like ID or id, unless it's affirmatively listed.
-
-<TableSchema>
-{schema_info}
-</TableSchema>
-""",
-        },
-        {
-            "role": "user",
-            "content": natural_language_query,
-        },
-    ]
-
-    # Loop in case we see an error or two
-    for _ in range(2):
-        # ~1.4 seconds
-        chat_completions_args = await chat_args.get_args(
-            session.get_user_id(), "query_layer"
-        )
-        response = await client.chat.completions.create(
-            **chat_completions_args,
-            messages=sql_messages,
-            max_completion_tokens=512,
-        )
-
-        sql_query = response.choices[0].message.content.strip()
-
-        # Use the execute_duckdb_query function from src/duckdb.py
-        try:
-            # ~1.1 seconds
-            result = await execute_duckdb_query(sql_query, layer.layer_id, max_n_rows)
-            return result
-
-        except (duckdb.duckdb.BinderException, duckdb.duckdb.CatalogException) as e:
-            sql_messages.append(
-                {
-                    "role": "system",
-                    "content": f"<SQLQueryError> {e} </SQLQueryError> Fix your above query.",
-                }
-            )
-            print("error", e, "trying again")
-        except Exception:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="An error occurred while executing the SQL query",
-            )
 
 
 async def describe_layer_internal(

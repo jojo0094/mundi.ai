@@ -45,6 +45,7 @@ async def get_layer_attributes(
 
     async with await layer.get_ogr_source() as ogr_source:
         from osgeo import ogr, gdal
+
         gdal.UseExceptions()
 
         data_source = ogr.Open(ogr_source)
