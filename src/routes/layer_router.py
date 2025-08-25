@@ -372,36 +372,13 @@ async def get_layer_cog_tif(
 async def get_layer_pmtiles(
     request: Request,
     layer: MapLayer = Depends(get_layer),
-    session: UserContext = Depends(verify_session_required),
 ):
-    async with get_async_db_connection() as conn:
-        # Check if layer is a vector type
-        if layer.type != "vector":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Layer is not a vector type. PMTiles can only be generated from vector data.",
-            )
-
-        # Check if layer is associated with any maps via the layers array
-        map_result = await conn.fetchrow(
-            """
-            SELECT m.id, p.link_accessible, m.owner_uuid, m.project_id
-            FROM user_mundiai_maps m
-            JOIN user_mundiai_projects p ON m.project_id = p.id
-            WHERE $1 = ANY(m.layers) AND m.soft_deleted_at IS NULL
-            """,
-            layer.layer_id,
+    # Check if layer is a vector type
+    if layer.type != "vector":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Layer is not a vector type. PMTiles can only be generated from vector data.",
         )
-
-        if map_result and not map_result["link_accessible"]:
-            # If not publicly accessible, verify that we have auth
-            # NOTE: owner_uuid is <class 'asyncpg.pgproto.pgproto.UUID'>
-            if session.get_user_id() != str(map_result["owner_uuid"]):
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Authentication required",
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
 
     # Set up S3 client and bucket
     bucket_name = get_bucket_name()
