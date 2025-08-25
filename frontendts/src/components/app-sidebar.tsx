@@ -2,11 +2,11 @@ import { BookOpen, Cloud, House, KeyRound, LogIn, LogOut, PanelRightClose, Panel
 import { Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import Session, { signOut } from 'supertokens-auth-react/recipe/session';
+import BuntingBirdSvg from '@/assets/bunting_bird.svg';
 import MDarkSvg from '@/assets/M-dark.svg';
 import MLightSvg from '@/assets/M-light.svg';
 import MundiDarkSvg from '@/assets/Mundi-dark.svg';
 import MundiLightSvg from '@/assets/Mundi-light.svg';
-import BuntingBirdSvg from '@/assets/bunting_bird.svg';
 import { Button } from '@/components/ui/button';
 import {
   Sidebar,
