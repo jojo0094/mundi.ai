@@ -440,9 +440,12 @@ async def run_geoprocessing_tool(
 
     with tracer.start_as_current_span(f"geoprocessing.{algorithm_id}") as span:
         try:
-            async with kue_ephemeral_action(
-                conversation_id, f"QGIS running {algorithm_id}..."
-            ), async_conn("get_layer_for_geoprocessing") as conn:
+            async with (
+                kue_ephemeral_action(
+                    conversation_id, f"QGIS running {algorithm_id}..."
+                ),
+                async_conn("get_layer_for_geoprocessing") as conn,
+            ):
                 input_params = {}
                 input_urls = {}
 
