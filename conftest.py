@@ -78,7 +78,7 @@ async def auth_client(client):
     yield client
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 async def test_map_with_vector_layers(auth_client):
     map_payload = {
         "title": "Geoprocessing Test Map",
