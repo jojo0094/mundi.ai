@@ -2851,12 +2851,12 @@ async def get_user_maps(
             # Convert datetime objects to strings
             created_on = (
                 map_data["created_on"].isoformat()
-                if isinstance(map_data["created_on"], datetime)
+                if isinstance(map_data["created_on"], datetime.datetime)
                 else map_data["created_on"]
             )
             last_edited = (
                 map_data["last_edited"].isoformat()
-                if isinstance(map_data["last_edited"], datetime)
+                if isinstance(map_data["last_edited"], datetime.datetime)
                 else map_data["last_edited"]
             )
 
