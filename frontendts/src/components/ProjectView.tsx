@@ -37,6 +37,7 @@ export default function ProjectView() {
   const sessionContext = Session.useSessionContext();
 
   const { projectId, versionIdParam } = useParams();
+
   if (!projectId) {
     throw new Error('No project ID');
   }

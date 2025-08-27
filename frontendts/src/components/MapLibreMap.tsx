@@ -68,6 +68,7 @@ const KUE_MESSAGE_STYLE = `
 const SWAP_XY = new Matrix4().set(0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
 
 // Custom Basemap Control class with visual preview menu
+
 class BasemapControl implements IControl {
   private _container: HTMLDivElement | undefined;
   private _button: HTMLButtonElement | undefined;
@@ -153,7 +154,7 @@ class BasemapControl implements IControl {
       item.style.borderRadius = '4px';
       item.style.overflow = 'hidden';
       item.style.position = 'relative';
-      item.style.border = '1px solid transparent';
+      item.style.border = '1px solid rgba(255, 255, 255, 0.2)'; // Light border for non-selected
 
       // Create image container
       const imageContainer = document.createElement('div');
@@ -196,18 +197,18 @@ class BasemapControl implements IControl {
 
       // Highlight current basemap
       if (basemap === this._currentBasemap) {
-        item.style.borderColor = '#007cff';
+        item.style.borderColor = '#007cff'; // Selected blue
       }
 
       // Hover styles
       item.addEventListener('mouseenter', () => {
         if (basemap !== this._currentBasemap) {
-          item.style.borderColor = '#ccc';
+          item.style.borderColor = '#4da3ff'; // Lighter blue on hover
         }
       });
       item.addEventListener('mouseleave', () => {
         if (basemap !== this._currentBasemap) {
-          item.style.borderColor = 'transparent';
+          item.style.borderColor = 'rgba(255, 255, 255, 0.2)'; // Light border for non-selected
         }
       });
 
@@ -311,9 +312,9 @@ class BasemapControl implements IControl {
       const htmlItem = item as HTMLElement;
 
       if (basemap === this._currentBasemap) {
-        htmlItem.style.borderColor = '#007cff';
+        htmlItem.style.borderColor = '#007cff'; // Selected blue
       } else {
-        htmlItem.style.borderColor = 'transparent';
+        htmlItem.style.borderColor = 'rgba(255, 255, 255, 0.2)'; // Light border for non-selected
       }
     });
   }
@@ -321,6 +322,10 @@ class BasemapControl implements IControl {
   updateBasemap(basemap: string): void {
     this._currentBasemap = basemap;
     this._updateMenuItems();
+  }
+
+  updateCallback(onBasemapChange: (basemap: string) => void): void {
+    this._onBasemapChange = onBasemapChange;
   }
 
   refreshPreviews(): void {
@@ -616,8 +621,12 @@ export default function MapLibreMap({
   // Function to handle basemap changes
   const handleBasemapChange = useCallback(
     async (newBasemap: string) => {
+      // Parse map ID from URL, but handle case where versionIdParam is optional
+      const pathParts = window.location.pathname.split('/');
+      const urlMapId = pathParts.length > 3 ? pathParts[3] : mapId; // Use mapId fallback if no version in URL
+
       try {
-        const response = await fetch(`/api/maps/${mapId}`, {
+        const response = await fetch(`/api/maps/${urlMapId}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -628,7 +637,7 @@ export default function MapLibreMap({
         if (response.ok) {
           // Invalidate style query to trigger immediate re-fetch with new basemap
           await queryClient.invalidateQueries({
-            queryKey: ['mapStyle', mapId],
+            queryKey: ['mapStyle', urlMapId],
           });
         } else {
           console.error('Failed to update basemap:', await response.text());
@@ -637,7 +646,7 @@ export default function MapLibreMap({
         console.error('Error updating basemap:', error);
       }
     },
-    [mapId, queryClient],
+    [queryClient], // mapId from URL, not dependencies to avoid loops
   );
 
   // Function to get the appropriate icon for an action
