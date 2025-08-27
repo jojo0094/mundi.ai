@@ -35,7 +35,7 @@ async def forked_map(
     async with async_conn("forked_map") as conn:
         source_map = await conn.fetchrow(
             """
-            SELECT m.id, m.project_id, m.title, m.description, m.layers
+            SELECT m.id, m.project_id, m.title, m.description, m.layers, m.basemap
             FROM user_mundiai_maps m
             WHERE m.id = $1 AND m.soft_deleted_at IS NULL AND m.owner_uuid = $2
             """,
@@ -57,8 +57,8 @@ async def forked_map(
         row = await conn.fetchrow(
             """
             INSERT INTO user_mundiai_maps
-            (id, project_id, owner_uuid, parent_map_id, title, description, layers, display_as_diff, fork_reason)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, $8)
+            (id, project_id, owner_uuid, parent_map_id, title, description, layers, display_as_diff, fork_reason, basemap)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, $8, $9)
             RETURNING *
             """,
             new_map_id,
@@ -69,6 +69,7 @@ async def forked_map(
             source_map["description"],
             source_map["layers"] or [],
             fork_reason.value,
+            source_map["basemap"],
         )
         new_map = MundiMap(**dict(row))
 

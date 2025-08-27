@@ -862,7 +862,10 @@ async def get_available_basemaps(
     base_map: BaseMapProvider = Depends(get_base_map_provider),
 ):
     """Get list of available basemap styles."""
-    return {"styles": base_map.get_available_styles()}
+    return {
+        "styles": base_map.get_available_styles(),
+        "display_names": base_map.get_style_display_names(),
+    }
 
 
 @basemap_router.get("/render.png", operation_id="render_basemap")
@@ -2793,12 +2796,16 @@ async def update_map(
         return {"message": "No basemap update provided"}
 
     async with async_conn("update_map") as conn:
-        updated_map = await conn.fetchrow("""
+        updated_map = await conn.fetchrow(
+            """
             UPDATE user_mundiai_maps
             SET basemap = $1, last_edited = CURRENT_TIMESTAMP
             WHERE id = $2
             RETURNING id, basemap
-        """, update_data.basemap, map.id)
+        """,
+            update_data.basemap,
+            map.id,
+        )
 
         if not updated_map:
             raise HTTPException(
@@ -2809,8 +2816,6 @@ async def update_map(
         return {
             "message": "Map updated successfully",
             "map_id": updated_map["id"],
-            "title": updated_map["title"],
-            "description": updated_map["description"],
             "basemap": updated_map["basemap"],
         }
 

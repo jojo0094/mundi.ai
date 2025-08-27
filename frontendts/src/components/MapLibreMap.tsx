@@ -75,11 +75,18 @@ class BasemapControl implements IControl {
   private _availableBasemaps: string[];
   private _currentBasemap: string;
   private _onBasemapChange: (basemap: string) => void;
+  private _displayNames: Record<string, string>;
   private _isMenuOpen: boolean = false;
 
-  constructor(availableBasemaps: string[], currentBasemap: string, onBasemapChange: (basemap: string) => void) {
+  constructor(
+    availableBasemaps: string[],
+    currentBasemap: string,
+    displayNames: Record<string, string>,
+    onBasemapChange: (basemap: string) => void,
+  ) {
     this._availableBasemaps = availableBasemaps;
     this._currentBasemap = currentBasemap;
+    this._displayNames = displayNames;
     this._onBasemapChange = onBasemapChange;
   }
 
@@ -234,11 +241,7 @@ class BasemapControl implements IControl {
   }
 
   private _getBasemapDisplayName(basemap: string): string {
-    const displayNames: Record<string, string> = {
-      openstreetmap: 'OpenStreetMap',
-      openfreemap: 'OpenFreeMap',
-    };
-    return displayNames[basemap] || basemap;
+    return this._displayNames[basemap] || basemap;
   }
 
   private _onClickButton(e: Event): void {
@@ -509,6 +512,7 @@ export default function MapLibreMap({
     [layerId: string]: JSX.Element;
   }>({});
   const [availableBasemaps, setAvailableBasemaps] = useState<string[]>([]);
+  const [basemapDisplayNames, setBasemapDisplayNames] = useState<Record<string, string>>({});
   const [demoConfig, setDemoConfig] = useState<{
     available: boolean;
     description: string;
@@ -1318,6 +1322,7 @@ export default function MapLibreMap({
         if (response.ok) {
           const data = await response.json();
           setAvailableBasemaps(data.styles);
+          setBasemapDisplayNames(data.display_names || {});
         }
       } catch (error) {
         console.error('Error fetching available basemaps:', error);
@@ -1350,11 +1355,11 @@ export default function MapLibreMap({
     if (map && availableBasemaps.length > 0 && !basemapControlRef.current) {
       // Use current basemap from style or default to first available
       const initialBasemap = currentBasemap || availableBasemaps[0];
-      const basemapControl = new BasemapControl(availableBasemaps, initialBasemap, handleBasemapChange);
+      const basemapControl = new BasemapControl(availableBasemaps, initialBasemap, basemapDisplayNames, handleBasemapChange);
       basemapControlRef.current = basemapControl;
       map.addControl(basemapControl);
     }
-  }, [availableBasemaps, currentBasemap, handleBasemapChange]);
+  }, [availableBasemaps, currentBasemap, basemapDisplayNames, handleBasemapChange]);
 
   // Update basemap control when basemap changes
   useEffect(() => {

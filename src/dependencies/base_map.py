@@ -41,6 +41,11 @@ class BaseMapProvider(ABC):
         """
         pass
 
+    @abstractmethod
+    def get_style_display_names(self) -> Dict[str, str]:
+        """Return mapping of style names to human-readable display names."""
+        pass
+
 
 class OpenStreetMapProvider(BaseMapProvider):
     """Default base map provider using OpenStreetMap tiles."""
@@ -117,6 +122,10 @@ class OpenStreetMapProvider(BaseMapProvider):
                 "https://tiles.openfreemap.org",
             ],
         }
+
+    def get_style_display_names(self) -> Dict[str, str]:
+        """Return mapping of style names to human-readable display names."""
+        return {"openstreetmap": "OpenStreetMap", "openfreemap": "OpenFreeMap"}
 
 
 # Default dependency - can be overridden in closed source
