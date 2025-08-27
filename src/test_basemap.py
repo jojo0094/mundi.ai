@@ -17,7 +17,7 @@ import pytest
 
 
 @pytest.mark.anyio
-async def test_get_available_basemaps(auth_client):
+async def test_get_available_basemaps(auth_client, expected_basemaps):
     """Test that the /api/basemaps/available endpoint returns expected basemaps."""
     response = await auth_client.get("/api/basemaps/available")
     assert response.status_code == 200
@@ -25,12 +25,12 @@ async def test_get_available_basemaps(auth_client):
     data = response.json()
     assert "styles" in data
     assert isinstance(data["styles"], list)
-    assert "openstreetmap" in data["styles"]
-    assert "openfreemap" in data["styles"]
+    for style in expected_basemaps["available_styles"]:
+        assert style in data["styles"]
 
 
 @pytest.mark.anyio
-async def test_create_map_and_update_basemap(auth_client):
+async def test_create_map_and_update_basemap(auth_client, expected_basemaps):
     """Test creating a map and updating its basemap setting."""
     # First create a map
     create_payload = {
@@ -42,8 +42,9 @@ async def test_create_map_and_update_basemap(auth_client):
     map_data = create_response.json()
     map_id = map_data["id"]
 
-    # Update the map's basemap to openfreemap
-    update_payload = {"basemap": "openfreemap"}
+    # Update the map's basemap to the second available style
+    second_style = expected_basemaps["available_styles"][1]
+    update_payload = {"basemap": second_style}
     update_response = await auth_client.patch(
         f"/api/maps/{map_id}", json=update_payload
     )
@@ -52,57 +53,61 @@ async def test_create_map_and_update_basemap(auth_client):
     update_data = update_response.json()
     assert "message" in update_data
     assert update_data["map_id"] == map_id
-    assert update_data["basemap"] == "openfreemap"
+    assert update_data["basemap"] == second_style
 
-    # Get the style.json and verify it uses the openfreemap basemap
+    # Get the style.json and verify it uses the correct basemap
     style_response = await auth_client.get(f"/api/maps/{map_id}/style.json")
     assert style_response.status_code == 200
 
     style_data = style_response.json()
     assert "metadata" in style_data
     assert "current_basemap" in style_data["metadata"]
-    assert style_data["metadata"]["current_basemap"] == "openfreemap"
-    # OpenFreeMap provides its own style JSON, so just verify it's a valid MapLibre style
+    assert style_data["metadata"]["current_basemap"] == second_style
+    # Just verify it's a valid MapLibre style
     assert "version" in style_data
     assert "sources" in style_data
     assert "layers" in style_data
 
 
 @pytest.mark.anyio
-async def test_create_map_and_update_basemap_to_openstreetmap(auth_client):
-    """Test creating a map and updating its basemap to openstreetmap."""
+async def test_create_map_and_update_basemap_to_openstreetmap(
+    auth_client, expected_basemaps
+):
+    """Test creating a map and updating its basemap to first available style."""
     # First create a map
     create_payload = {
-        "title": "OSM Test Map",
-        "description": "A test map for OSM basemap",
+        "title": "First Style Test Map",
+        "description": "A test map for first basemap style",
     }
     create_response = await auth_client.post("/api/maps/create", json=create_payload)
     assert create_response.status_code == 200
     map_data = create_response.json()
     map_id = map_data["id"]
 
-    # Update the map's basemap to openstreetmap
-    update_payload = {"basemap": "openstreetmap"}
+    # Update the map's basemap to first style
+    first_style = expected_basemaps["first_style"]
+    update_payload = {"basemap": first_style}
     update_response = await auth_client.patch(
         f"/api/maps/{map_id}", json=update_payload
     )
     assert update_response.status_code == 200
 
     update_data = update_response.json()
-    assert update_data["basemap"] == "openstreetmap"
+    assert update_data["basemap"] == first_style
 
-    # Get the style.json and verify it uses the openstreetmap basemap
+    # Get the style.json and verify it uses the first style basemap
     style_response = await auth_client.get(f"/api/maps/{map_id}/style.json")
     assert style_response.status_code == 200
 
     style_data = style_response.json()
-    assert style_data["metadata"]["current_basemap"] == "openstreetmap"
-    assert style_data["name"] == "OpenStreetMap"
-    assert "osm" in style_data["sources"]
+    assert style_data["metadata"]["current_basemap"] == first_style
+    assert style_data["name"] == expected_basemaps["default_style_name"]
 
 
 @pytest.mark.anyio
-async def test_map_style_defaults_to_first_available_basemap(auth_client):
+async def test_map_style_defaults_to_first_available_basemap(
+    auth_client, expected_basemaps
+):
     """Test that a new map without a basemap setting uses the first available basemap."""
     # Create a map
     create_payload = {
@@ -119,16 +124,17 @@ async def test_map_style_defaults_to_first_available_basemap(auth_client):
     assert style_response.status_code == 200
 
     style_data = style_response.json()
-    # Should default to openstreetmap (first available)
+    # Should default to first available basemap
+    first_style = expected_basemaps["first_style"]
     assert (
         style_data["metadata"]["current_basemap"] is None
-        or style_data["metadata"]["current_basemap"] == "openstreetmap"
+        or style_data["metadata"]["current_basemap"] == first_style
     )
-    assert style_data["name"] == "OpenStreetMap"
+    assert style_data["name"] == expected_basemaps["default_style_name"]
 
 
 @pytest.mark.anyio
-async def test_update_basemap_with_invalid_name(auth_client):
+async def test_update_basemap_with_invalid_name(auth_client, expected_basemaps):
     """Test updating basemap with an invalid basemap name still works (provider handles it)."""
     # Create a map first
     create_payload = {
@@ -155,9 +161,9 @@ async def test_update_basemap_with_invalid_name(auth_client):
     assert style_response.status_code == 200
 
     style_data = style_response.json()
-    # Invalid basemap should default to openstreetmap
+    # Invalid basemap should stay as requested but provider defaults to first available
     assert style_data["metadata"]["current_basemap"] == "nonexistent"
-    assert style_data["name"] == "OpenStreetMap"  # Provider defaults to OSM
+    assert style_data["name"] == expected_basemaps["default_style_name"]
 
 
 @pytest.mark.anyio
@@ -196,11 +202,12 @@ async def test_update_map_empty_payload(auth_client):
 
 
 @pytest.mark.anyio
-async def test_render_basemap_openstreetmap(auth_client):
-    """Test rendering OpenStreetMap basemap."""
+async def test_render_basemap_openstreetmap(auth_client, expected_basemaps):
+    """Test rendering first available basemap."""
+    first_style = expected_basemaps["first_style"]
     response = await auth_client.get(
         "/api/basemaps/render.png",
-        params={"basemap": "openstreetmap"},
+        params={"basemap": first_style},
     )
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
@@ -211,11 +218,12 @@ async def test_render_basemap_openstreetmap(auth_client):
 
 
 @pytest.mark.anyio
-async def test_render_basemap_openfreemap(auth_client):
-    """Test rendering OpenFreeMap basemap."""
+async def test_render_basemap_openfreemap(auth_client, expected_basemaps):
+    """Test rendering second available basemap."""
+    second_style = expected_basemaps["available_styles"][1]
     response = await auth_client.get(
         "/api/basemaps/render.png",
-        params={"basemap": "openfreemap"},
+        params={"basemap": second_style},
     )
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"

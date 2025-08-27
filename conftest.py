@@ -222,3 +222,12 @@ def pytest_configure(config):
         return original_create_default_context(*args, **kwargs)
 
     ssl.create_default_context = cached_create_default_context
+
+
+@pytest.fixture
+def expected_basemaps():
+    return {
+        "available_styles": ["openstreetmap", "openfreemap"],
+        "first_style": "openstreetmap",
+        "default_style_name": "OpenStreetMap"
+    }
