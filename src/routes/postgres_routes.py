@@ -31,7 +31,7 @@ from fastapi import (
 )
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from src.dependencies.dag import forked_map_by_user
+from src.dependencies.dag import forked_map_by_user, get_map, get_layer
 from src.database.models import MundiMap, MapLayer
 from ..dependencies.session import (
     verify_session_required,
@@ -40,7 +40,6 @@ from ..dependencies.session import (
 )
 from typing import List, Optional
 import logging
-from datetime import datetime
 from pyproj import Transformer
 from osgeo import osr
 from fastapi import File, UploadFile, Form
@@ -75,7 +74,6 @@ from ..dependencies.postgres_connection import (
 from typing import Callable
 from opentelemetry import trace
 from src.dag import DAGEditOperationResponse
-from src.dependencies.dag import get_map, get_layer
 
 import fiona
 

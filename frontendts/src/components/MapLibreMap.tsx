@@ -646,7 +646,7 @@ export default function MapLibreMap({
         console.error('Error updating basemap:', error);
       }
     },
-    [queryClient], // mapId from URL, not dependencies to avoid loops
+    [queryClient, mapId],
   );
 
   // Function to get the appropriate icon for an action
@@ -1364,9 +1364,12 @@ export default function MapLibreMap({
     if (map && availableBasemaps.length > 0 && !basemapControlRef.current) {
       // Use current basemap from style or default to first available
       const initialBasemap = currentBasemap || availableBasemaps[0];
-      const basemapControl = new BasemapControl(availableBasemaps, initialBasemap, basemapDisplayNames, handleBasemapChange);
+      // Create control with a no-op callback initially to avoid dependency issues
+      const basemapControl = new BasemapControl(availableBasemaps, initialBasemap, basemapDisplayNames, () => undefined);
       basemapControlRef.current = basemapControl;
       map.addControl(basemapControl);
+      // Immediately update with the real callback
+      basemapControl.updateCallback(handleBasemapChange);
     }
   }, [availableBasemaps, currentBasemap, basemapDisplayNames, handleBasemapChange]);
 
@@ -1376,6 +1379,13 @@ export default function MapLibreMap({
       basemapControlRef.current.updateBasemap(currentBasemap);
     }
   }, [currentBasemap]);
+
+  // Update basemap control callback when handleBasemapChange changes
+  useEffect(() => {
+    if (basemapControlRef.current) {
+      basemapControlRef.current.updateCallback(handleBasemapChange);
+    }
+  }, [handleBasemapChange]);
 
   // Effect to log when attribute table is opened/closed
   useEffect(() => {
