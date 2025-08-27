@@ -19,6 +19,7 @@ import math
 import secrets
 import json
 import csv
+import datetime
 from io import StringIO
 from fastapi import (
     APIRouter,
@@ -26,6 +27,7 @@ from fastapi import (
     status,
     Request,
     Depends,
+    Query,
 )
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
@@ -310,6 +312,10 @@ class PresignedUrlResponse(BaseModel):
     url: str
     expires_in_seconds: int = 3600 * 24  # Default 24 hours
     format: str
+
+
+class MapUpdateRequest(BaseModel):
+    basemap: Optional[str] = Field(None, description="Basemap style name")
 
 
 @router.post(
@@ -859,6 +865,57 @@ async def get_available_basemaps(
     return {"styles": base_map.get_available_styles()}
 
 
+@basemap_router.get("/render.png", operation_id="render_basemap")
+async def render_basemap(
+    basemap: str = Query(...),
+    base_map: BaseMapProvider = Depends(get_base_map_provider),
+):
+    available_basemaps = base_map.get_available_styles()
+    if basemap not in available_basemaps:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid basemap '{basemap}'. Available options: {available_basemaps}",
+        )
+
+    s3_key = f"basemap-previews/{basemap}.png"
+    s3 = await get_async_s3_client()
+    bucket = get_bucket_name()
+
+    try:
+        head_response = await s3.head_object(Bucket=bucket, Key=s3_key)
+        last_modified = head_response["LastModified"]
+
+        # Check if cache is less than 24 hours old
+        now = datetime.datetime.now(datetime.timezone.utc)
+        age = now - last_modified
+
+        if age.total_seconds() < 86400:  # 24 hours = 86400 seconds
+            response = await s3.get_object(Bucket=bucket, Key=s3_key)
+            cached_image = await response["Body"].read()
+            return Response(content=cached_image, media_type="image/png")
+    except Exception:
+        pass
+
+    style_json = await base_map.get_base_style(basemap)
+
+    response, _ = await render_map_internal(
+        map_id=f"basemap_{basemap}",
+        bbox="-10,29.75,30,70",
+        width=256,
+        height=256,
+        renderer="mbgl",
+        bgcolor="white",
+        style_json=json.dumps(style_json),
+    )
+
+    try:
+        await s3.put_object(Bucket=bucket, Key=s3_key, Body=response.body)
+    except Exception:
+        pass
+
+    return response
+
+
 async def get_map_style_internal(
     map_id: str,
     base_map: BaseMapProvider,
@@ -868,10 +925,10 @@ async def get_map_style_internal(
 ):
     # Get vector layers for this map from the database
     async with async_conn("get_map_style_internal.fetch_layers") as conn:
-        # Get layers from the map
+        # Get layers and basemap from the map
         map_result = await conn.fetchrow(
             """
-            SELECT layers
+            SELECT layers, basemap
             FROM user_mundiai_maps
             WHERE id = $1 AND soft_deleted_at IS NULL
             """,
@@ -919,7 +976,14 @@ async def get_map_style_internal(
         vector_layers.sort(key=get_geometry_order)
         postgis_layers.sort(key=get_geometry_order)
 
-    style_json = await base_map.get_base_style(basemap)
+    # Use basemap parameter, or fall back to stored basemap from database
+    effective_basemap = basemap or map_result["basemap"]
+    style_json = await base_map.get_base_style(effective_basemap)
+
+    # Add current basemap to style metadata for frontend
+    if "metadata" not in style_json:
+        style_json["metadata"] = {}
+    style_json["metadata"]["current_basemap"] = effective_basemap
 
     # compute combined WGS84 bounds from all_layers and derive center + zoom with 20% padding
     bounds_list = [layer["bounds"] for layer in all_layers if layer.get("bounds")]
@@ -2717,6 +2781,38 @@ async def remove_layer_from_map(
         layer_name=layer_name,
         message="Layer successfully removed from map",
     )
+
+
+@router.patch("/{map_id}", operation_id="update_map")
+async def update_map(
+    update_data: MapUpdateRequest,
+    map: MundiMap = Depends(get_map),
+):
+    """Update map basemap selection."""
+    if update_data.basemap is None:
+        return {"message": "No basemap update provided"}
+
+    async with async_conn("update_map") as conn:
+        updated_map = await conn.fetchrow("""
+            UPDATE user_mundiai_maps
+            SET basemap = $1, last_edited = CURRENT_TIMESTAMP
+            WHERE id = $2
+            RETURNING id, basemap
+        """, update_data.basemap, map.id)
+
+        if not updated_map:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update map",
+            )
+
+        return {
+            "message": "Map updated successfully",
+            "map_id": updated_map["id"],
+            "title": updated_map["title"],
+            "description": updated_map["description"],
+            "basemap": updated_map["basemap"],
+        }
 
 
 @router.get("/", operation_id="list_user_maps", response_model=UserMapsResponse)

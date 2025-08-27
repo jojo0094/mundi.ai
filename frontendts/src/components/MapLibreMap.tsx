@@ -1,6 +1,6 @@
 // Copyright Bunting Labs, Inc. 2025
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useConnectionStatus, usePresence } from 'driftdb-react';
 import legendSymbol, { type RenderElement } from 'legend-symbol-ts';
 
@@ -67,12 +67,15 @@ const KUE_MESSAGE_STYLE = `
 
 const SWAP_XY = new Matrix4().set(0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
 
-// Custom Globe Control class
-class GlobeControl implements IControl {
+// Custom Basemap Control class with visual preview menu
+class BasemapControl implements IControl {
   private _container: HTMLDivElement | undefined;
+  private _button: HTMLButtonElement | undefined;
+  private _menu: HTMLDivElement | undefined;
   private _availableBasemaps: string[];
   private _currentBasemap: string;
   private _onBasemapChange: (basemap: string) => void;
+  private _isMenuOpen: boolean = false;
 
   constructor(availableBasemaps: string[], currentBasemap: string, onBasemapChange: (basemap: string) => void) {
     this._availableBasemaps = availableBasemaps;
@@ -83,12 +86,16 @@ class GlobeControl implements IControl {
   onAdd(_map: MLMap): HTMLElement {
     this._container = document.createElement('div');
     this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+    this._container.style.position = 'relative';
 
+    // Create button
     const button = document.createElement('button');
-    button.className = 'maplibregl-ctrl-globe';
+    this._button = button;
+    button.className = 'maplibregl-ctrl-basemap';
     button.type = 'button';
-    button.title = 'Toggle satellite basemap';
-    button.setAttribute('aria-label', 'Toggle satellite basemap');
+    button.title = 'Choose basemap';
+    button.setAttribute('aria-label', 'Choose basemap');
+    button.setAttribute('aria-expanded', 'false');
 
     // Create globe icon (SVG)
     button.innerHTML = `
@@ -104,32 +111,231 @@ class GlobeControl implements IControl {
     button.style.alignItems = 'center';
     button.style.justifyContent = 'center';
 
-    button.addEventListener('click', this._onClickGlobe.bind(this));
+    button.addEventListener('click', this._onClickButton.bind(this));
+
+    // Create dropdown menu with image previews
+    const menu = document.createElement('div');
+    this._menu = menu;
+    menu.className = 'maplibregl-ctrl-basemap-menu';
+    menu.style.position = 'absolute';
+    menu.style.top = '100%';
+    menu.style.right = '0';
+    menu.style.marginTop = '5px';
+    menu.style.backgroundColor = 'oklch(27.8% 0.033 256.848)';
+    menu.style.border = '1px solid oklch(1 0 0 / 15%)';
+    menu.style.borderRadius = '6px';
+    menu.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
+    menu.style.padding = '8px';
+    menu.style.zIndex = '1000';
+    menu.style.display = 'none';
+    menu.style.width = '280px';
+    menu.style.gridTemplateColumns = 'repeat(2, 120px)';
+    menu.style.gap = '8px';
+    menu.style.justifyContent = 'center';
+
+    // Create menu items with image previews
+    this._availableBasemaps.forEach((basemap) => {
+      const item = document.createElement('button');
+      item.className = 'maplibregl-ctrl-basemap-item';
+      item.style.display = 'block';
+      item.style.width = '120px';
+      item.style.height = '120px';
+      item.style.padding = '0';
+      item.style.background = 'transparent';
+      item.style.cursor = 'pointer';
+      item.style.borderRadius = '4px';
+      item.style.overflow = 'hidden';
+      item.style.position = 'relative';
+      item.style.border = '1px solid transparent';
+
+      // Create image container
+      const imageContainer = document.createElement('div');
+      imageContainer.style.position = 'relative';
+      imageContainer.style.width = '100%';
+      imageContainer.style.height = '100%';
+      imageContainer.style.backgroundColor = '#f5f5f5';
+
+      // Create preview image
+      const img = document.createElement('img');
+      img.style.width = '100%';
+      img.style.height = '100%';
+      img.style.objectFit = 'cover';
+      img.style.display = 'block';
+
+      // Create loading placeholder
+      const loading = document.createElement('div');
+      loading.style.position = 'absolute';
+      loading.style.top = '50%';
+      loading.style.left = '50%';
+      loading.style.transform = 'translate(-50%, -50%)';
+      loading.style.fontSize = '10px';
+      loading.style.color = '#666';
+      loading.textContent = 'Loading...';
+      imageContainer.appendChild(loading);
+
+      // Create basemap name overlay
+      const nameOverlay = document.createElement('div');
+      nameOverlay.style.position = 'absolute';
+      nameOverlay.style.bottom = '0';
+      nameOverlay.style.left = '0';
+      nameOverlay.style.right = '0';
+      nameOverlay.style.background = 'linear-gradient(transparent, rgba(0,0,0,0.7))';
+      nameOverlay.style.color = 'white';
+      nameOverlay.style.padding = '10px 8px 6px';
+      nameOverlay.style.fontSize = '10px';
+      nameOverlay.style.fontWeight = 'bold';
+      nameOverlay.style.textAlign = 'center';
+      nameOverlay.textContent = this._getBasemapDisplayName(basemap);
+
+      // Highlight current basemap
+      if (basemap === this._currentBasemap) {
+        item.style.borderColor = '#007cff';
+      }
+
+      // Hover styles
+      item.addEventListener('mouseenter', () => {
+        if (basemap !== this._currentBasemap) {
+          item.style.borderColor = '#ccc';
+        }
+      });
+      item.addEventListener('mouseleave', () => {
+        if (basemap !== this._currentBasemap) {
+          item.style.borderColor = 'transparent';
+        }
+      });
+
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._selectBasemap(basemap);
+      });
+
+      imageContainer.appendChild(img);
+      imageContainer.appendChild(nameOverlay);
+      item.appendChild(imageContainer);
+      menu.appendChild(item);
+
+      // Load basemap preview image
+      this._loadBasemapPreview(img, loading, basemap);
+    });
+
+    // Close menu when clicking outside
+    document.addEventListener('click', this._onDocumentClick.bind(this));
 
     this._container.appendChild(button);
+    this._container.appendChild(menu);
     return this._container;
   }
 
   onRemove(): void {
+    document.removeEventListener('click', this._onDocumentClick.bind(this));
     if (this._container && this._container.parentNode) {
       this._container.parentNode.removeChild(this._container);
     }
   }
 
-  private _onClickGlobe(): void {
-    if (!this._availableBasemaps.length) return;
+  private _getBasemapDisplayName(basemap: string): string {
+    const displayNames: Record<string, string> = {
+      openstreetmap: 'OpenStreetMap',
+      openfreemap: 'OpenFreeMap',
+    };
+    return displayNames[basemap] || basemap;
+  }
 
-    // Cycle to next basemap
-    const currentIndex = this._availableBasemaps.indexOf(this._currentBasemap);
-    const nextIndex = (currentIndex + 1) % this._availableBasemaps.length;
-    const nextBasemap = this._availableBasemaps[nextIndex];
+  private _onClickButton(e: Event): void {
+    e.stopPropagation();
+    this._toggleMenu();
+  }
 
-    this._currentBasemap = nextBasemap;
-    this._onBasemapChange(nextBasemap);
+  private _onDocumentClick(): void {
+    if (this._isMenuOpen) {
+      this._closeMenu();
+    }
+  }
+
+  private _toggleMenu(): void {
+    if (this._isMenuOpen) {
+      this._closeMenu();
+    } else {
+      this._openMenu();
+    }
+  }
+
+  private _openMenu(): void {
+    if (!this._menu || !this._button) return;
+
+    this._menu.style.display = 'grid';
+    this._isMenuOpen = true;
+    this._button.setAttribute('aria-expanded', 'true');
+  }
+
+  private _closeMenu(): void {
+    if (!this._menu || !this._button) return;
+
+    this._menu.style.display = 'none';
+    this._isMenuOpen = false;
+    this._button.setAttribute('aria-expanded', 'false');
+  }
+
+  private _selectBasemap(basemap: string): void {
+    this._currentBasemap = basemap;
+    this._onBasemapChange(basemap);
+    this._closeMenu();
+    this._updateMenuItems();
+  }
+
+  private _loadBasemapPreview(img: HTMLImageElement, loading: HTMLElement, basemap: string): void {
+    const url = new URL('/api/basemaps/render.png', window.location.origin);
+    url.searchParams.set('basemap', basemap);
+
+    img.onload = () => {
+      loading.style.display = 'none';
+    };
+
+    img.onerror = () => {
+      loading.textContent = 'Error';
+      loading.style.color = '#ff6b6b';
+    };
+
+    img.src = url.toString();
+  }
+
+  private _updateMenuItems(): void {
+    if (!this._menu) return;
+
+    const items = this._menu.querySelectorAll('.maplibregl-ctrl-basemap-item');
+    items.forEach((item, index) => {
+      const basemap = this._availableBasemaps[index];
+      const htmlItem = item as HTMLElement;
+
+      if (basemap === this._currentBasemap) {
+        htmlItem.style.borderColor = '#007cff';
+      } else {
+        htmlItem.style.borderColor = 'transparent';
+      }
+    });
   }
 
   updateBasemap(basemap: string): void {
     this._currentBasemap = basemap;
+    this._updateMenuItems();
+  }
+
+  refreshPreviews(): void {
+    if (!this._menu) return;
+
+    const items = this._menu.querySelectorAll('.maplibregl-ctrl-basemap-item');
+    items.forEach((item, index) => {
+      const basemap = this._availableBasemaps[index];
+      const img = item.querySelector('img') as HTMLImageElement;
+      const loading = item.querySelector('div[style*="Loading"]') as HTMLElement;
+
+      if (img && loading) {
+        loading.style.display = 'block';
+        loading.textContent = 'Loading...';
+        loading.style.color = '#666';
+        this._loadBasemapPreview(img, loading, basemap);
+      }
+    });
   }
 }
 
@@ -292,16 +498,16 @@ export default function MapLibreMap({
   invalidateProjectData,
   invalidateMapData,
 }: MapLibreMapProps) {
+  const queryClient = useQueryClient();
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const localMapRef = useRef<MLMap | null>(null);
-  const globeControlRef = useRef<GlobeControl | null>(null);
+  const basemapControlRef = useRef<BasemapControl | null>(null);
   const exportPDFControlRef = useRef<ExportPDFControl | null>(null);
   const deckOverlayRef = useRef<MapboxOverlay | null>(null);
   const [hasZoomed, setHasZoomed] = useState(false);
   const [layerSymbols, setLayerSymbols] = useState<{
     [layerId: string]: JSX.Element;
   }>({});
-  const [currentBasemap, setCurrentBasemap] = useState<string>('');
   const [availableBasemaps, setAvailableBasemaps] = useState<string[]>([]);
   const [demoConfig, setDemoConfig] = useState<{
     available: boolean;
@@ -404,9 +610,31 @@ export default function MapLibreMap({
   const [isCancelling, setIsCancelling] = useState(false);
 
   // Function to handle basemap changes
-  const handleBasemapChange = useCallback(async (newBasemap: string) => {
-    setCurrentBasemap(newBasemap);
-  }, []);
+  const handleBasemapChange = useCallback(
+    async (newBasemap: string) => {
+      try {
+        const response = await fetch(`/api/maps/${mapId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ basemap: newBasemap }),
+        });
+
+        if (response.ok) {
+          // Invalidate style query to trigger immediate re-fetch with new basemap
+          await queryClient.invalidateQueries({
+            queryKey: ['mapStyle', mapId],
+          });
+        } else {
+          console.error('Failed to update basemap:', await response.text());
+        }
+      } catch (error) {
+        console.error('Error updating basemap:', error);
+      }
+    },
+    [mapId, queryClient],
+  );
 
   // Function to get the appropriate icon for an action
   const getActionIcon = (action: string) => {
@@ -882,12 +1110,9 @@ export default function MapLibreMap({
 
   // Use useQuery to fetch the style.json
   const { data: styleData } = useQuery({
-    queryKey: ['mapStyle', mapId, currentBasemap, styleUpdateCounter],
+    queryKey: ['mapStyle', mapId, styleUpdateCounter],
     queryFn: async () => {
       const url = new URL(`/api/maps/${mapId}/style.json`, window.location.origin);
-      if (currentBasemap) {
-        url.searchParams.set('basemap', currentBasemap);
-      }
       const response = await fetch(url.toString());
       if (!response.ok) {
         throw new Error(`Failed to fetch style: ${response.statusText}`);
@@ -896,6 +1121,14 @@ export default function MapLibreMap({
     },
     enabled: !!mapId, // Only run query when mapId is available
   });
+
+  // Get current basemap from style metadata or default to first available
+  const currentBasemap = useMemo(() => {
+    if (styleData?.metadata?.current_basemap) {
+      return styleData.metadata.current_basemap;
+    }
+    return availableBasemaps[0] || '';
+  }, [styleData, availableBasemaps]);
 
   // Separate effect to handle style updates when styleData changes
   useEffect(() => {
@@ -1111,22 +1344,22 @@ export default function MapLibreMap({
     fetchDemoConfig();
   }, []);
 
-  // Add globe control when map and basemaps are available
+  // Add basemap control when map and basemaps are available
   useEffect(() => {
     const map = localMapRef.current;
-    if (map && availableBasemaps.length > 0 && !globeControlRef.current) {
-      // Use first available basemap as the initial display value
+    if (map && availableBasemaps.length > 0 && !basemapControlRef.current) {
+      // Use current basemap from style or default to first available
       const initialBasemap = currentBasemap || availableBasemaps[0];
-      const globeControl = new GlobeControl(availableBasemaps, initialBasemap, handleBasemapChange);
-      globeControlRef.current = globeControl;
-      map.addControl(globeControl);
+      const basemapControl = new BasemapControl(availableBasemaps, initialBasemap, handleBasemapChange);
+      basemapControlRef.current = basemapControl;
+      map.addControl(basemapControl);
     }
   }, [availableBasemaps, currentBasemap, handleBasemapChange]);
 
-  // Update globe control when basemap changes
+  // Update basemap control when basemap changes
   useEffect(() => {
-    if (globeControlRef.current && currentBasemap) {
-      globeControlRef.current.updateBasemap(currentBasemap);
+    if (basemapControlRef.current && currentBasemap) {
+      basemapControlRef.current.updateBasemap(currentBasemap);
     }
   }, [currentBasemap]);
 

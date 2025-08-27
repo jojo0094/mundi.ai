@@ -97,6 +97,7 @@ class MundiMap(Base):
         server_default=func.current_timestamp(),
     )
     fork_reason = Column(String, nullable=True)
+    basemap = Column(String(50), nullable=True)
     soft_deleted_at = Column(TIMESTAMP(timezone=True))
 
     # Relationships
