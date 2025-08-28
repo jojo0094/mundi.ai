@@ -152,6 +152,9 @@ app.mount("/drift/", drift_app)
 # First mount specific static assets to ensure they're properly served
 app.mount("/assets", StaticFiles(directory="frontendts/dist/assets"), name="spa-assets")
 
+# Mount public assets (favicons, etc.) at root level
+app.mount("/", StaticFiles(directory="frontendts/dist"), name="public-assets")
+
 
 @app.post("/supertokens/session/refresh")
 async def mock_session_refresh(request: Request):
