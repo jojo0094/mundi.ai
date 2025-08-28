@@ -112,6 +112,19 @@ the rest of the internet).
 
 ## Best practices and errors
 
+### Whitelist Mundi egress IP addresses
+
+Mundi will always connect to your Postgres from the below IP addresses. By whitelisting them while rejecting other connections, you'll increase the security of your database.
+
+Allow on TCP 5432: `34.44.109.93/32`, `34.27.218.71/32` (both). The `/32` means a single IP address.
+
+**Docs by host**
+- **AWS RDS/Aurora (Postgres):** [Security groups](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Overview.RDSSecurityGroups.html).
+- **GCP Cloud SQL (Postgres):** ["Authorized networks"](https://cloud.google.com/sql/docs/postgres/authorize-networks).
+- **Azure Database for PostgreSQL (Flexible Server):** [Firewall rules](https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/security-firewall-rules).
+- **DigitalOcean Managed PostgreSQL:** [Trusted Sources](https://docs.digitalocean.com/products/databases/postgresql/how-to/secure/).
+- **Self-hosted Postgres:** [pg_hba.conf](https://www.postgresql.org/docs/current/auth-pg-hba-conf.html).
+
 ### Creating a read-only user for Mundi
 
 We recommend that users create read-only database users for Mundi to use. This read-only user should only
