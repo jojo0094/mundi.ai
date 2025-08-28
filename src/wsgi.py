@@ -149,13 +149,6 @@ app.mount("/drift/", drift_app)
 # mcp.mount()
 
 
-# First mount specific static assets to ensure they're properly served
-app.mount("/assets", StaticFiles(directory="frontendts/dist/assets"), name="spa-assets")
-
-# Mount public assets (favicons, etc.) at root level
-app.mount("/", StaticFiles(directory="frontendts/dist"), name="public-assets")
-
-
 @app.post("/supertokens/session/refresh")
 async def mock_session_refresh(request: Request):
     # it's simpler for self hosters to not have to log in, and there's a big
@@ -190,6 +183,17 @@ async def mock_session_refresh(request: Request):
         response.set_cookie("sIdRefreshToken", id_refresh, httponly=True)
 
         return response
+
+
+app.mount("/assets", StaticFiles(directory="frontendts/dist/assets"), name="spa-assets")
+
+@app.get("/favicon-light.svg")
+async def get_favicon_light_svg():
+    return FileResponse("frontendts/dist/favicon-light.svg")
+
+@app.get("/favicon-dark.svg")
+async def get_favicon_dark_svg():
+    return FileResponse("frontendts/dist/favicon-dark.svg")
 
 
 @app.exception_handler(StarletteHTTPException)
