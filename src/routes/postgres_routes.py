@@ -1635,22 +1635,19 @@ async def internal_upload_layer(
             elif layer_type == "point_cloud":
                 # handled above
                 pass
-            else:
-                # Use shared utility for vector bounds and metadata extraction
-                layer_info = await get_layer_bounds_and_metadata(
-                    temp_file_path, layer_type
+            else: # probably vector
+                # Use shared vector processing pipeline
+                layer_result = await process_vector_layer_common(
+                    layer_id,
+                    temp_file_path,
+                    layer_name,
+                    user_id,
+                    project_id,
                 )
-                bounds = layer_info["bounds"]
-                geometry_type = layer_info["geometry_type"]
-                feature_count = layer_info["feature_count"]
-                metadata_dict.update(layer_info["metadata_updates"])
-
-            # Generate MapLibre layers for vector layers
-            maplibre_layers = None
-            if layer_type == "vector" and geometry_type:
-                maplibre_layers = generate_maplibre_layers_for_layer_id(
-                    layer_id, geometry_type
-                )
+                bounds = layer_result["bounds"]
+                geometry_type = layer_result["geometry_type"]
+                feature_count = layer_result["feature_count"]
+                metadata_dict.update(layer_result["metadata"])
 
             new_layer_result = await conn.fetchrow(
                 """
@@ -1707,8 +1704,9 @@ async def internal_upload_layer(
                 else f"/api/layer/{new_layer_id}.cog.tif"
             )
 
-            # If this is a vector layer, create a style for it
-            if layer_type == "vector" and geometry_type:
+            # For vector layers, create style and associate with map
+            if layer_type == "vector" and geometry_type and geometry_type != "unknown":
+                # Use the MapLibre style from process_vector_layer_common
                 maplibre_layers = generate_maplibre_layers_for_layer_id(
                     new_layer_id, geometry_type
                 )
@@ -1737,42 +1735,6 @@ async def internal_upload_layer(
                     new_layer_id,
                     style_id,
                 )
-
-                # Generate PMTiles for vector layers
-                if feature_count is not None and feature_count > 0:
-                    # Generate PMTiles asynchronously using shared function
-                    pmtiles_key = await generate_pmtiles_from_ogr_source(
-                        new_layer_id,
-                        temp_file_path,
-                        feature_count,
-                        user_id,
-                        project_id,
-                    )
-
-                    # Update metadata with PMTiles key
-                    result = await conn.fetchrow(
-                        """
-                        SELECT metadata FROM map_layers
-                        WHERE layer_id = $1
-                        """,
-                        new_layer_id,
-                    )
-                    metadata = result["metadata"] if result["metadata"] else {}
-                    # Parse metadata JSON if it's a string
-                    if isinstance(metadata, str):
-                        metadata = json.loads(metadata)
-                    metadata["pmtiles_key"] = pmtiles_key
-
-                    # Update the database
-                    await conn.execute(
-                        """
-                        UPDATE map_layers
-                        SET metadata = $1
-                        WHERE layer_id = $2
-                        """,
-                        json.dumps(metadata),
-                        new_layer_id,
-                    )
 
             # Cleanup temp_dir if it exists
             if temp_dir:
@@ -2116,34 +2078,34 @@ async def add_remote_layer(
                     request.url,  # Store original remote URL
                 )
 
-                # For vector layers, handle style creation (PMTiles already handled by process_vector_layer_common)
+                # For vector layers, handle style creation using the style from process_vector_layer_common
                 if layer_type == "vector" and geometry_type != "unknown":
-                    maplibre_layers = generate_maplibre_layers_for_layer_id(
-                        layer_id, geometry_type
-                    )
-                    style_id = generate_id(prefix="S")
-                    await conn.execute(
-                        """
-                        INSERT INTO layer_styles
-                        (style_id, layer_id, style_json, created_by)
-                        VALUES ($1, $2, $3, $4)
-                        """,
-                        style_id,
-                        layer_id,
-                        json.dumps(maplibre_layers),
-                        session.get_user_id(),
-                    )
+                    # Use the MapLibre style generated by process_vector_layer_common
+                    maplibre_layers = layer_result["maplibre_style"]
+                    if maplibre_layers:
+                        style_id = generate_id(prefix="S")
+                        await conn.execute(
+                            """
+                            INSERT INTO layer_styles
+                            (style_id, layer_id, style_json, created_by)
+                            VALUES ($1, $2, $3, $4)
+                            """,
+                            style_id,
+                            layer_id,
+                            json.dumps(maplibre_layers),
+                            session.get_user_id(),
+                        )
 
-                    # Associate style with the map
-                    await conn.execute(
-                        """
-                        INSERT INTO map_layer_styles (map_id, layer_id, style_id)
-                        VALUES ($1, $2, $3)
-                        """,
-                        forked_map.id,
-                        layer_id,
-                        style_id,
-                    )
+                        # Associate style with the map
+                        await conn.execute(
+                            """
+                            INSERT INTO map_layer_styles (map_id, layer_id, style_id)
+                            VALUES ($1, $2, $3)
+                            """,
+                            forked_map.id,
+                            layer_id,
+                            style_id,
+                        )
 
                 # Add to map if requested
                 if request.add_layer_to_map:
