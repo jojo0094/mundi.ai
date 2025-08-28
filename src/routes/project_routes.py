@@ -825,7 +825,7 @@ async def get_project_embed(
     async with get_async_db_connection() as conn:
         project_data = await conn.fetchrow(
             """
-            SELECT id, maps
+            SELECT id, maps, title
             FROM user_mundiai_projects
             WHERE id = $1 AND soft_deleted_at IS NULL
             """,
@@ -839,6 +839,7 @@ async def get_project_embed(
             )
 
         maps = project_data["maps"]
+        project_title = project_data["title"] or "Untitled Map"
         if not maps or len(maps) == 0:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Project has no maps"
@@ -952,16 +953,33 @@ async def get_project_embed(
     <style>
         body {{ margin: 0; padding: 0; }}
         #map {{ position: absolute; top: 0; bottom: 0; width: 100%; }}
+        #title-overlay {{
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: #1e2939;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 1000;
+            max-width: calc(100% - 40px);
+            box-sizing: border-box;
+            word-wrap: break-word;
+        }}
     </style>
 </head>
 <body>
     <div id="map"></div>
+    <div id="title-overlay">{project_title}</div>
     <script>
         const map = new maplibregl.Map({{
             container: 'map',
             attributionControl: {{
                 compact: false
-            }}
+            }},
             style: {style_json_str}
         }});
 
