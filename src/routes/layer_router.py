@@ -929,3 +929,45 @@ async def set_layer_style(
         style_id=style_id,
         layer_id=layer_id,
     )
+
+
+class LayerUpdateRequest(BaseModel):
+    name: str = Field(description="New name for the layer")
+
+
+class LayerUpdateResponse(BaseModel):
+    layer_id: str = Field(description="ID of the updated layer")
+    name: str = Field(description="New name of the layer")
+
+
+@layer_router.patch(
+    "/layer/{layer_id}",
+    operation_id="update_layer",
+    summary="Update layer properties",
+    response_model=LayerUpdateResponse,
+)
+async def update_layer(
+    update_data: LayerUpdateRequest,
+    layer: MapLayer = Depends(get_layer),
+    user_id: str = Depends(session_user_id),
+) -> LayerUpdateResponse:
+    if user_id != str(layer.owner_uuid):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the layer owner can update this layer",
+        )
+
+    async with get_async_db_connection() as conn:
+        await conn.execute(
+            """
+            UPDATE map_layers SET name = $1, last_edited = CURRENT_TIMESTAMP
+            WHERE layer_id = $2
+            """,
+            update_data.name,
+            layer.layer_id,
+        )
+
+    return LayerUpdateResponse(
+        layer_id=layer.layer_id,
+        name=update_data.name,
+    )

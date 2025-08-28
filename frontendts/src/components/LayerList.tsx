@@ -194,6 +194,33 @@ const LayerList: React.FC<LayerListProps> = ({
     },
   });
 
+  const renameMutation = useMutation({
+    mutationFn: async ({ layerId, newName }: { layerId: string; newName: string }) => {
+      const response = await fetch(`/api/layer/${layerId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: newName }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+        throw new Error(errorData.detail || response.statusText);
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      updateMapData();
+      toast.success('Layer renamed');
+    },
+    onError: (error) => {
+      console.error('Error renaming layer:', error);
+      toast.error(`Error renaming layer: ${error.message}`);
+    },
+  });
+
   const handlePostgisConnect = async () => {
     if (!currentMapData?.project_id) {
       toast.error('No project ID available');
@@ -365,6 +392,9 @@ const LayerList: React.FC<LayerListProps> = ({
                     title={errorTitle}
                     onToggleVisibility={(layerId) => {
                       toggleLayerVisibility(layerId);
+                    }}
+                    onRename={(layerId, newName) => {
+                      renameMutation.mutate({ layerId, newName });
                     }}
                     dropdownActions={{
                       'zoom-to-layer': {
