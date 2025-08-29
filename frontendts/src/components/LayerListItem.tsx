@@ -113,7 +113,7 @@ export const LayerListItem: React.FC<LayerListItemProps> = ({
 
   if (displayAsDiff) {
     if (status === 'added') {
-      liClassName += ' bg-green-100 dark:bg-green-900 hover:bg-green-200 dark:hover:bg-green-800';
+      liClassName += ' bg-green-900 hover:bg-green-800';
     } else if (status === 'removed') {
       liClassName += ' bg-red-100 dark:bg-red-900 hover:bg-red-200 dark:hover:bg-red-800';
     } else if (status === 'edited') {
