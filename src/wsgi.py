@@ -23,13 +23,10 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from fastapi_proxy_lib.fastapi.app import reverse_http_app, reverse_ws_app
-import httpx
 
 from src.routes import (
     postgres_routes,
     project_routes,
-    room_routes,
     message_routes,
     websocket,
     conversation_routes,
@@ -60,26 +57,12 @@ app = FastAPI(
 )
 
 
-@app.exception_handler(httpx.RemoteProtocolError)
-async def handle_driftdb_error(request: Request, exc: httpx.RemoteProtocolError):
-    if not request.url.path.startswith("/room/"):
-        raise exc
-
-    return JSONResponse(
-        status_code=404,
-        content={"detail": "Room not found, likely expired"},
-    )
 
 
 app.include_router(
     postgres_routes.router,
     prefix="/api/maps",
     tags=["Maps"],
-)
-app.include_router(
-    room_routes.router,
-    prefix="/api/maps",
-    tags=["Collaboration"],
 )
 app.include_router(
     message_routes.router,
@@ -118,16 +101,6 @@ app.include_router(
 )
 
 
-# Create a combined proxy router for DriftDB that handles both HTTP and WebSocket
-# Use a WebSocket-capable proxy for the /room routes
-room_ws_app = reverse_ws_app(base_url="ws://driftdb:8080/room/")
-# Mount it as a sub-application
-app.mount("/room/", room_ws_app)
-
-# Use HTTP proxy for other DriftDB paths
-drift_app = reverse_http_app(base_url="http://driftdb:8080/")
-# Mount it as a sub-application
-app.mount("/drift/", drift_app)
 
 
 # TODO: this isn't useful right now. But we should work on it in the future

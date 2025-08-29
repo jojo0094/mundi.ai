@@ -57,7 +57,6 @@ interface LayerListProps {
   openDropzone: () => void;
   activeActions: EphemeralAction[];
   readyState: number;
-  driftDbConnected: boolean;
   isInConversation: boolean;
   setShowAttributeTable: (show: boolean) => void;
   setSelectedLayer: (layer: MapLayer | null) => void;
@@ -80,7 +79,6 @@ const LayerList: React.FC<LayerListProps> = ({
   openDropzone,
   readyState,
   activeActions,
-  driftDbConnected,
   isInConversation,
   setShowAttributeTable,
   setSelectedLayer,
@@ -286,7 +284,7 @@ const LayerList: React.FC<LayerListProps> = ({
           <div className="flex items-center gap-2">
             <Tooltip>
               <TooltipTrigger>
-                {(!isInConversation || readyState === ReadyState.OPEN) && driftDbConnected ? (
+                {!isInConversation || readyState === ReadyState.OPEN ? (
                   <span className="text-green-300 inline-block">
                     <SignalHigh />
                   </span>
@@ -308,10 +306,6 @@ const LayerList: React.FC<LayerListProps> = ({
                       )}
                     </div>
                   )}
-                  <div className={driftDbConnected ? 'text-green-300' : 'text-red-300'}>
-                    cursors:{' '}
-                    {driftDbConnected ? <SignalHigh className="inline-block h-4 w-4" /> : <SignalLow className="inline-block h-4 w-4" />}
-                  </div>
                 </div>
               </TooltipContent>
             </Tooltip>

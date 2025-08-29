@@ -1,6 +1,5 @@
 // Copyright Bunting Labs, Inc. 2025
 
-import { DriftDBProvider } from 'driftdb-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Accept } from 'react-dropzone';
 import { useDropzone } from 'react-dropzone';
@@ -502,34 +501,32 @@ export default function ProjectView() {
       <input {...getInputProps()} />
 
       {/* Interactive Map Section */}
-      <DriftDBProvider api="/drift/" room={roomId.room_id}>
-        <MapLibreMap
-          mapId={versionId}
-          height="100%"
-          project={project}
-          mapData={mapData}
-          mapTree={mapTree || null}
-          conversationId={conversationId}
-          conversations={conversations || []}
-          setConversationId={setConversationId}
-          readyState={readyState}
-          openDropzone={open}
-          uploadingFiles={uploadingFiles}
-          hiddenLayerIDs={hiddenLayerIDs}
-          toggleLayerVisibility={toggleLayerVisibility}
-          mapRef={mapRef}
-          activeActions={activeActions}
-          setActiveActions={setActiveActions}
-          zoomHistory={zoomHistory}
-          zoomHistoryIndex={zoomHistoryIndex}
-          setZoomHistoryIndex={setZoomHistoryIndex}
-          addError={addError}
-          dismissError={dismissError}
-          errors={errors}
-          invalidateProjectData={invalidateProjectData}
-          invalidateMapData={invalidateMapData}
-        />
-      </DriftDBProvider>
+      <MapLibreMap
+        mapId={versionId}
+        height="100%"
+        project={project}
+        mapData={mapData}
+        mapTree={mapTree || null}
+        conversationId={conversationId}
+        conversations={conversations || []}
+        setConversationId={setConversationId}
+        readyState={readyState}
+        openDropzone={open}
+        uploadingFiles={uploadingFiles}
+        hiddenLayerIDs={hiddenLayerIDs}
+        toggleLayerVisibility={toggleLayerVisibility}
+        mapRef={mapRef}
+        activeActions={activeActions}
+        setActiveActions={setActiveActions}
+        zoomHistory={zoomHistory}
+        zoomHistoryIndex={zoomHistoryIndex}
+        setZoomHistoryIndex={setZoomHistoryIndex}
+        addError={addError}
+        dismissError={dismissError}
+        errors={errors}
+        invalidateProjectData={invalidateProjectData}
+        invalidateMapData={invalidateMapData}
+      />
     </div>
   );
 }

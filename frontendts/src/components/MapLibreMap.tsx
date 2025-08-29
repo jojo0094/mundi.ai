@@ -1,7 +1,6 @@
 // Copyright Bunting Labs, Inc. 2025
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useConnectionStatus, usePresence } from 'driftdb-react';
 import legendSymbol, { type RenderElement } from 'legend-symbol-ts';
 import { BasemapControl } from './BasemapControl';
 
@@ -48,8 +47,6 @@ import type {
   MapProject,
   MapTreeResponse,
   MessageSendRequest,
-  PointerPosition,
-  PresenceData,
   SanitizedMessage,
 } from '../lib/types';
 
@@ -332,8 +329,6 @@ export default function MapLibreMap({
     return layer;
   }, []);
 
-  const [pointerPosition, setPointerPosition] = useState<PointerPosition | null>(null);
-  const otherClientPositions = usePresence<PointerPosition | null>('cursors', pointerPosition);
   const [showAttributeTable, setShowAttributeTable] = useState(false);
   const [selectedLayer, setSelectedLayer] = useState<MapLayer | null>(null);
 
@@ -579,25 +574,6 @@ export default function MapLibreMap({
   const pointsGeoJSON = useMemo(() => {
     const features: GeoJSON.Feature[] = [];
 
-    // Add real user pointer positions
-    Object.entries(otherClientPositions)
-      .filter(([, data]) => data !== null && data.value !== null && 'lng' in data.value && 'lat' in data.value)
-      .forEach(([id, data]) => {
-        const presenceData = data as unknown as PresenceData;
-        features.push({
-          type: 'Feature' as const,
-          geometry: {
-            type: 'Point' as const,
-            coordinates: [presenceData.value.lng, presenceData.value.lat],
-          },
-          properties: {
-            user: id,
-            abbrev: id.substring(0, 6),
-            color: '#' + id.substring(0, 6),
-          },
-        });
-      });
-
     // Add Kue's animated positions
     Object.entries(kuePositions).forEach(([actionId, position]) => {
       features.push({
@@ -614,7 +590,7 @@ export default function MapLibreMap({
       type: 'FeatureCollection' as const,
       features,
     };
-  }, [otherClientPositions, kuePositions]);
+  }, [kuePositions]);
 
   const loadLegendSymbols = useCallback(
     (map: MLMap) => {
@@ -719,14 +695,6 @@ export default function MapLibreMap({
 
         // Load cursor image initially
         loadCursorImage();
-      });
-
-      newMap.on('mousemove', (e) => {
-        const wrapped = e.lngLat.wrap();
-        setPointerPosition({
-          lng: wrapped.lng,
-          lat: wrapped.lat,
-        });
       });
 
       newMap.on('error', (e) => {
@@ -922,7 +890,6 @@ export default function MapLibreMap({
     }
   }, [pointsGeoJSON]);
 
-  const status = useConnectionStatus();
   const [inputValue, setInputValue] = useState('');
   const readyStateRef = useRef<number>(readyState);
 
@@ -1157,7 +1124,6 @@ export default function MapLibreMap({
             isInConversation={conversationId !== null}
             readyState={readyState}
             activeActions={activeActions}
-            driftDbConnected={status.connected}
             setShowAttributeTable={setShowAttributeTable}
             setSelectedLayer={setSelectedLayer}
             updateMapData={invalidateMapData}
