@@ -26,16 +26,6 @@ export default defineConfig(({ mode }) => ({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
-      '/drift': {
-        target: 'http://localhost:8000',
-        ws: true,
-        rewriteWsOrigin: true,
-      },
-      '/room': {
-        target: 'http://localhost:8000',
-        ws: true,
-        rewriteWsOrigin: true,
-      }
     }
   },
   build: {
