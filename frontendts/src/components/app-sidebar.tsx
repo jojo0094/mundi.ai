@@ -1,4 +1,4 @@
-import { BookOpen, Cloud, House, KeyRound, LogIn, LogOut, PanelRightClose, PanelRightOpen, UserPlus } from 'lucide-react';
+import { BookOpen, Cloud, House, Key, KeyRound, LogIn, LogOut, PanelRightClose, PanelRightOpen, UserPlus } from 'lucide-react';
 import { Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import Session, { signOut } from 'supertokens-auth-react/recipe/session';
@@ -31,6 +31,7 @@ export function AppSidebar() {
   const sessionContext = Session.useSessionContext();
   const { state, toggleSidebar } = useSidebar();
   const { allProjects, allProjectsLoading } = useProjects();
+  const hasEEComponents = import.meta.env.VITE_EE_COMPONENTS_IMPORT_AT_BUILD === 'yes';
 
   async function onLogout() {
     await signOut();
@@ -124,6 +125,16 @@ export function AppSidebar() {
               {!sessionContext.loading &&
                 (sessionContext.doesSessionExist ? (
                   <>
+                    {hasEEComponents && (
+                      <SidebarMenuItem>
+                        <SidebarMenuButton asChild tooltip="API Keys">
+                          <Link to="/settings/api-keys">
+                            <Key className="w-4 h-4 mr-2" />
+                            <span className="text-sm">API Keys</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    )}
                     <SidebarMenuItem>
                       <SidebarMenuButton onClick={onLogout} className="cursor-pointer" tooltip="Logout">
                         <LogOut className="w-4 h-4 mr-2" />

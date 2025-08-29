@@ -17,9 +17,11 @@ import { Toaster } from '@/components/ui/sonner';
 import MapsList from './components/MapsList';
 import ProjectView from './components/ProjectView';
 import { ProjectsProvider } from './contexts/ProjectsContext';
+import { ApiKeys } from './lib/ee-loader';
 import PostGISDocumentation from './pages/PostGISDocumentation';
 import './App.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Suspense } from 'react';
 
 const websiteDomain = import.meta.env.VITE_WEBSITE_DOMAIN;
 if (!websiteDomain) {
@@ -78,6 +80,16 @@ function AppContent() {
               element={
                 <SessionAuth>
                   <PostGISDocumentation />
+                </SessionAuth>
+              }
+            />
+            <Route
+              path="/settings/api-keys"
+              element={
+                <SessionAuth>
+                  <Suspense fallback={<div>Loading...</div>}>
+                    <ApiKeys />
+                  </Suspense>
                 </SessionAuth>
               }
             />

@@ -55,3 +55,4 @@ export const ShareEmbedModal =
       projectId?: string;
     }>
   >('ShareEmbedModal');
+export const ApiKeys = loadEEComponent<React.ComponentType>('ApiKeys');
