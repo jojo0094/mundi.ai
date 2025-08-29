@@ -114,6 +114,12 @@ def validate_remote_url(url: str, source_type: str) -> str:
             )
         # Extract the actual URL from CSV:/vsicurl/URL format
         actual_url = url.replace("CSV:/vsicurl/", "")
+    elif url.startswith("WFS:"):
+        # Extract the actual URL from WFS:URL format
+        actual_url = url.replace("WFS:", "")
+    elif url.startswith("ESRIJSON:"):
+        # Extract the actual URL from ESRIJSON:URL format
+        actual_url = url.replace("ESRIJSON:", "")
     else:
         actual_url = url
 
@@ -197,7 +203,7 @@ def validate_remote_url(url: str, source_type: str) -> str:
     except Exception as e:
         if isinstance(e, HTTPException):
             raise
-        raise HTTPException(status_code=400, detail=f"Invalid URL format: {str(e)}")
+        raise HTTPException(status_code=400, detail="Invalid URL format")
 
     return url
 
@@ -1635,7 +1641,7 @@ async def internal_upload_layer(
             elif layer_type == "point_cloud":
                 # handled above
                 pass
-            else: # probably vector
+            else:  # probably vector
                 # Use shared vector processing pipeline
                 layer_result = await process_vector_layer_common(
                     layer_id,
@@ -1782,9 +1788,12 @@ async def add_remote_layer(
             f"Google Sheets source must use CSV: prefix, got: {request.url}"
         )
     elif request.source_type == "vector":
-        # Vector sources can be direct URLs or WFS services
+        # Vector sources can be direct URLs or service prefixes
         if request.url.startswith("WFS:"):
             # WFS URLs are valid vector sources
+            pass
+        elif request.url.startswith("ESRIJSON:"):
+            # ESRI service URLs are valid vector sources
             pass
         elif request.url.startswith("http"):
             # Direct HTTP URLs for vector files
@@ -1857,10 +1866,15 @@ async def add_remote_layer(
     elif (
         "SERVICE=WFS" in request.url.upper()
         and "REQUEST=GETFEATURE" in request.url.upper()
-    ):
+    ) or request.url.startswith("WFS:"):
         # WFS services should NOT be downloaded - they're processed directly with OGR
         # Estimate file size for WFS (we can't really know without processing)
         file_size_bytes = 10000  # Default estimate for WFS response
+        file_content = None
+    elif request.url.startswith("ESRIJSON:"):
+        # ESRI services should NOT be downloaded - they're processed directly with OGR
+        # Estimate file size for ESRI services (we can't really know without processing)
+        file_size_bytes = 10000  # Default estimate for ESRI response
         file_content = None
     else:
         # Download remote file temporarily for processing while maintaining remote status
@@ -1896,12 +1910,10 @@ async def add_remote_layer(
         # For WFS sources, we work directly with the remote URL
         file_ext = ".gml"  # WFS typically returns GML
         ogr_source = request.url  # Use the WFS URL directly
-    elif (
-        "/FeatureServer" in request.url or "/MapServer" in request.url
-    ) and "/query" in request.url:
-        # For ESRI Feature Service or Map Service URLs - use ESRIJSON driver with prefix
+    elif request.url.startswith("ESRIJSON:"):
+        # For ESRI Feature Service or Map Service URLs with ESRIJSON prefix from frontend
         file_ext = ".geojson"  # ESRI services return GeoJSON-like data
-        ogr_source = f"ESRIJSON:{request.url}"  # Use ESRIJSON driver prefix
+        ogr_source = request.url  # Use the prefixed URL as-is
     else:
         # Save downloaded content to temporary file for processing
         import os

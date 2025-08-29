@@ -251,7 +251,7 @@ async def test_send_message_with_all_remote_layers(auth_client):
     esri_response = await auth_client.post(
         f"/api/maps/{current_map_id}/layers/remote",
         json={
-            "url": esri_url,
+            "url": f"ESRIJSON:{esri_url}",
             "name": "Pool Permits ESRI FS",
             "source_type": "vector",
             "add_layer_to_map": True,
@@ -385,7 +385,7 @@ async def test_esri_feature_service_with_pmtiles_generation(auth_client):
     response = await auth_client.post(
         f"/api/maps/{map_id}/layers/remote",
         json={
-            "url": esri_url,
+            "url": f"ESRIJSON:{esri_url}",
             "name": "Test ESRI Feature Service Layer",
             "source_type": "vector",
         },
@@ -434,7 +434,7 @@ async def test_esri_url_with_frontend_transformation(auth_client):
     response = await auth_client.post(
         f"/api/maps/{map_id}/layers/remote",
         json={
-            "url": esri_url_with_limit,
+            "url": f"ESRIJSON:{esri_url_with_limit}",
             "name": "Pool Permits Test",
             "source_type": "vector",
         },

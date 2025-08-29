@@ -57,8 +57,6 @@ app = FastAPI(
 )
 
 
-
-
 app.include_router(
     postgres_routes.router,
     prefix="/api/maps",
@@ -160,9 +158,11 @@ async def mock_session_refresh(request: Request):
 
 app.mount("/assets", StaticFiles(directory="frontendts/dist/assets"), name="spa-assets")
 
+
 @app.get("/favicon-light.svg")
 async def get_favicon_light_svg():
     return FileResponse("frontendts/dist/favicon-light.svg")
+
 
 @app.get("/favicon-dark.svg")
 async def get_favicon_dark_svg():

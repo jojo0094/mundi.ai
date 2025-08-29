@@ -26,6 +26,7 @@ app.openapi_url = "/openapi.json"
 def _canon(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", s.lower())
 
+
 def prune_redundant_titles(node):
     # remove 'title' fields that are just humanized versions of the property/parameter names.
     if isinstance(node, dict):
