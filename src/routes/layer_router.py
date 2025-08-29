@@ -76,7 +76,6 @@ layer_router = APIRouter()
 async def get_layer_cog_tif(
     request: Request,
     layer: MapLayer = Depends(get_layer),
-    session: UserContext = Depends(verify_session_required),
 ):
     # Check if layer is a raster type
     if layer.type != "raster":
@@ -86,27 +85,6 @@ async def get_layer_cog_tif(
         )
 
     async with get_async_db_connection() as conn:
-        # Check if layer is associated with any maps via the layers array
-        map_result = await conn.fetchrow(
-            """
-            SELECT m.id, p.link_accessible, m.owner_uuid
-            FROM user_mundiai_maps m
-            JOIN user_mundiai_projects p ON m.project_id = p.id
-            WHERE $1 = ANY(m.layers) AND m.soft_deleted_at IS NULL
-            """,
-            layer.layer_id,
-        )
-
-        if map_result and not map_result["link_accessible"]:
-            # If not publicly accessible, verify that we have auth
-            if session.get_user_id() != str(map_result["owner_uuid"]):
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Authentication required",
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
-
-        # Continue with the same implementation as the map-scoped endpoint
         bucket_name = get_bucket_name()
 
         # Check if metadata has cog_key
@@ -140,11 +118,7 @@ async def get_layer_cog_tif(
                         gdalinfo_cmd, check=True, capture_output=True, text=True
                     )
                     gdalinfo_json = json.loads(gdalinfo_result.stdout)
-                except (subprocess.CalledProcessError, json.JSONDecodeError) as e:
-                    logger.error(
-                        f"Failed to get gdalinfo for {layer.layer_id}: {e}",
-                        exc_info=True,
-                    )
+                except (subprocess.CalledProcessError, json.JSONDecodeError):
                     raise HTTPException(
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                         detail=f"Failed to process raster info for layer {layer.layer_id}.",
@@ -164,20 +138,11 @@ async def get_layer_cog_tif(
                     reprojected_file_path,
                 ]
                 try:
-                    print(
-                        f"INFO: Running gdalwarp for layer {layer.layer_id} to EPSG:3857."
-                    )
                     subprocess.run(
                         gdalwarp_cmd, check=True, capture_output=True, text=True
                     )
                     input_file_for_cog = reprojected_file_path
-                    print(
-                        f"INFO: Layer {layer.layer_id} successfully processed/reprojected to EPSG:3857."
-                    )
-                except subprocess.CalledProcessError as e:
-                    print(
-                        f"ERROR: gdalwarp failed for layer {layer.layer_id}: {e.stderr}. Using original file for COG creation."
-                    )
+                except subprocess.CalledProcessError:
                     # Fallback to original file if reprojection fails
                     input_file_for_cog = local_input_file
 
@@ -204,19 +169,10 @@ async def get_layer_cog_tif(
                             rgb_cmd, check=True, capture_output=True, text=True
                         )
                         input_file_for_cog = local_rgb_file
-                        print(
-                            f"INFO: Expanded single band to RGB for layer {layer.layer_id}"
-                        )
-                    except subprocess.CalledProcessError as e:
-                        print(
-                            f"WARN: gdal_translate -expand rgb failed for layer {layer.layer_id}: {e.stderr}. Using single-band with color ramp."
-                        )
+                    except subprocess.CalledProcessError:
                         # Use the existing raster_value_stats_b1 from metadata
                         if "raster_value_stats_b1" in layer.metadata_dict:
                             needs_color_ramp_suffix = True
-                            print(
-                                f"INFO: Using existing raster_value_stats_b1 for layer {layer.layer_id}"
-                            )
                         # Keep input_file_for_cog as the original single-band file
 
                 # Convert to Cloud Optimized GeoTIFF
@@ -247,8 +203,6 @@ async def get_layer_cog_tif(
                 try:
                     subprocess.run(cog_cmd, check=True, capture_output=True, text=True)
                 except subprocess.CalledProcessError as e:
-                    error_detail = f"COG generation failed. Command: {' '.join(e.cmd)}\nStderr: {e.stderr}\nStdout: {e.stdout}"
-                    print(f"ERROR: {error_detail}")
                     raise HTTPException(
                         status_code=500,
                         detail=f"COG generation failed: {e.stderr or 'Unknown GDAL error'}",
@@ -258,7 +212,6 @@ async def get_layer_cog_tif(
                 cog_key = f"cog/layer/{layer.layer_id}.cog.tif"
                 s3 = await get_async_s3_client()
                 await s3.upload_file(local_cog_file, bucket_name, cog_key)
-                print(f"INFO: Uploaded COG to s3://{bucket_name}/{cog_key}")
 
                 # Update the layer metadata with the COG key
                 metadata = layer.metadata_dict
@@ -274,7 +227,6 @@ async def get_layer_cog_tif(
                     json.dumps(metadata),
                     layer.layer_id,
                 )
-                print(f"INFO: Updated metadata for layer {layer.layer_id}", metadata)
 
         # Ensure cog_key is available if it was just generated
         if not cog_key:
@@ -464,17 +416,11 @@ async def get_layer_pmtiles(
 async def get_layer_laz(
     request: Request,
     layer: MapLayer = Depends(get_layer),
-    session: UserContext = Depends(verify_session_required),
 ):
     if layer.type != "point_cloud":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Layer is not a point cloud type",
-        )
-
-    if session.get_user_id() != str(layer.owner_uuid):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Layer not found"
         )
 
     # Set up S3 client and bucket
@@ -681,13 +627,6 @@ async def get_layer_geojson(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Layer is not a vector type. GeoJSON format is only available for vector data.",
-        )
-
-    # Handle remote URLs and S3 storage uniformly, but keep PostGIS separate
-    if layer.type == "postgis":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="PostGIS layers not yet supported for GeoJSON export.",
         )
 
     # Get unified OGR source (works for S3 and remote URLs)
