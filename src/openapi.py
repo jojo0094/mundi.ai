@@ -18,8 +18,41 @@ from pathlib import Path
 from fastapi.openapi.utils import get_openapi
 from fastapi.routing import APIRoute
 from src.wsgi import app
+import re
 
 app.openapi_url = "/openapi.json"
+
+
+def _canon(s: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", s.lower())
+
+def prune_redundant_titles(node):
+    # remove 'title' fields that are just humanized versions of the property/parameter names.
+    if isinstance(node, dict):
+        # case 1: object schema with properties
+        if isinstance(node.get("properties"), dict):
+            for prop_name, prop_schema in list(node["properties"].items()):
+                # recurse first (handles nested objects/arrays)
+                prune_redundant_titles(prop_schema)
+                title = prop_schema.get("title")
+                if isinstance(title, str) and _canon(title) == _canon(prop_name):
+                    prop_schema.pop("title", None)
+
+        # case 2: parameter object { name, in, schema: { title: ... } }
+        if {"name", "in", "schema"} <= node.keys() and isinstance(node["schema"], dict):
+            title = node["schema"].get("title")
+            if isinstance(title, str) and _canon(title) == _canon(str(node["name"])):
+                node["schema"].pop("title", None)
+            prune_redundant_titles(node["schema"])
+
+        # recurse generically through other fields (items, allOf, etc. too)
+        for k, v in list(node.items()):
+            if isinstance(v, (dict, list)) and k not in ("properties", "schema"):
+                prune_redundant_titles(v)
+
+    elif isinstance(node, list):
+        for item in node:
+            prune_redundant_titles(item)
 
 
 def custom_openapi():
@@ -60,6 +93,8 @@ semver.
             "url": "https://buntinglabs.com",
         },
     )
+
+    prune_redundant_titles(openapi_schema)
 
     app.openapi_schema = openapi_schema
     return app.openapi_schema
