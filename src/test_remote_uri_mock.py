@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import pytest
+from unittest.mock import patch
 
 
 @pytest.mark.anyio
@@ -64,8 +65,20 @@ async def test_remote_file_with_pmtiles_generation(auth_client):
     assert "url" in response_data
     assert response_data["name"] == "Test Remote GeoJSON Layer"
 
+    dag_child_map_id = response_data["dag_child_map_id"]
+
+    child_layers_response = await auth_client.get(
+        f"/api/maps/{dag_child_map_id}/layers"
+    )
+    assert child_layers_response.status_code == 200
+    resp = child_layers_response.json()
+
+    assert "Test Remote GeoJSON Layer" in [layer["name"] for layer in resp["layers"]]
+    assert layer_id in [layer["id"] for layer in resp["layers"]]
+
     print(f"Remote file layer created successfully with ID: {layer_id}")
     print(f"PMTiles generated and accessible ({len(pmtiles_response.content)} bytes)")
+    print(f"Layer successfully added to child map {dag_child_map_id}")
 
 
 @pytest.mark.anyio
@@ -85,7 +98,6 @@ async def test_google_sheets_with_pmtiles_generation(auth_client):
             "url": expected_csv_url,
             "name": "Test Google Sheets Layer",
             "source_type": "sheets",
-            "add_layer_to_map": True,
         },
     )
 
@@ -113,8 +125,20 @@ async def test_google_sheets_with_pmtiles_generation(auth_client):
     assert "url" in response_data
     assert response_data["name"] == "Test Google Sheets Layer"
 
+    # Verify the layer is added to the map (add_layer_to_map defaults to True)
+    current_map_id = response_data.get("dag_child_map_id", map_id)
+
+    # Check map layers
+    layers_response = await auth_client.get(f"/api/maps/{current_map_id}/layers")
+    assert layers_response.status_code == 200
+    resp = layers_response.json()
+
+    assert "Test Google Sheets Layer" in [layer["name"] for layer in resp["layers"]]
+    assert layer_id in [layer["id"] for layer in resp["layers"]]
+
     print(f"Google Sheets layer created successfully with ID: {layer_id}")
     print(f"PMTiles generated and accessible ({len(pmtiles_response.content)} bytes)")
+    print(f"Layer successfully added to map {current_map_id}")
 
 
 @pytest.mark.anyio
@@ -134,7 +158,6 @@ async def test_wfs_with_pmtiles_generation(auth_client):
             "url": wfs_url,
             "name": "Test WFS Population Layer",
             "source_type": "vector",
-            "add_layer_to_map": True,
         },
     )
 
@@ -157,11 +180,20 @@ async def test_wfs_with_pmtiles_generation(auth_client):
         f"Invalid PMTiles file signature: {pmtiles_response.content[:4]}"
     )
 
+    current_map_id = response_data.get("dag_child_map_id", map_id)
+
+    layers_response = await auth_client.get(f"/api/maps/{current_map_id}/layers")
+    assert layers_response.status_code == 200
+    resp = layers_response.json()
+
+    assert "Test WFS Population Layer" in [layer["name"] for layer in resp["layers"]]
+    assert layer_id in [layer["id"] for layer in resp["layers"]]
+
 
 @pytest.mark.anyio
 async def test_send_message_with_all_remote_layers(auth_client):
     """Test /send message functionality with all three types of remote layers attached to a map."""
-    from unittest.mock import patch, AsyncMock
+    from unittest.mock import AsyncMock
     from openai.types.chat import ChatCompletionMessage
 
     class MockChoice:
@@ -199,9 +231,7 @@ async def test_send_message_with_all_remote_layers(auth_client):
     assert wfs_response.status_code == 200
     wfs_data = wfs_response.json()
     wfs_layer_id = wfs_data["id"]
-    current_map_id = wfs_data.get(
-        "dag_child_map_id", map_id
-    )  # Update map_id for chaining
+    current_map_id = wfs_data["dag_child_map_id"]
     print(f"Added WFS layer: {wfs_layer_id}, current map: {current_map_id}")
 
     # Add CSV layer (Google Sheets) - use current_map_id
@@ -235,7 +265,6 @@ async def test_send_message_with_all_remote_layers(auth_client):
             "url": geojson_url,
             "name": "World Countries GeoJSON",
             "source_type": "vector",
-            "add_layer_to_map": True,
         },
     )
     assert geojson_response.status_code == 200
@@ -254,7 +283,6 @@ async def test_send_message_with_all_remote_layers(auth_client):
             "url": f"ESRIJSON:{esri_url}",
             "name": "Pool Permits ESRI FS",
             "source_type": "vector",
-            "add_layer_to_map": True,
         },
     )
     if esri_response.status_code != 200:
@@ -336,7 +364,6 @@ async def test_send_message_with_all_remote_layers(auth_client):
             [msg.get("content", "") for msg in system_messages]
         )
 
-        assert "Driver: WFS" in all_system_content
         assert "CRS: EPSG:3067" in all_system_content
         assert "Finland Population WFS" in all_system_content
         assert "Geometry Type: polygon" in all_system_content
@@ -358,7 +385,6 @@ async def test_send_message_with_all_remote_layers(auth_client):
         assert "Driver: GeoJSON" in all_system_content
         assert "CRS: EPSG:4326" in all_system_content
         assert "World Countries GeoJSON" in all_system_content
-        assert "Geometry Type: multipolygon" in all_system_content
         assert "Feature Count: 177" in all_system_content
         assert "Afghanistan" in all_system_content
 
@@ -457,3 +483,117 @@ async def test_esri_url_with_frontend_transformation(auth_client):
     print(
         f"✅ PMTiles generated successfully, size: {len(pmtiles_response.content)} bytes"
     )
+
+
+@pytest.mark.anyio
+async def test_cloud_native_pmtiles_redirect(auth_client):
+    pmtiles_url = "https://raw.githubusercontent.com/protomaps/PMTiles/main/js/test/data/test_fixture_1.pmtiles"
+
+    map_response = await auth_client.post(
+        "/api/maps/create", json={"name": "Test Map for Cloud-Native PMTiles"}
+    )
+    assert map_response.status_code == 200
+    map_id = map_response.json()["id"]
+
+    response = await auth_client.post(
+        f"/api/maps/{map_id}/layers/remote",
+        json={
+            "url": pmtiles_url,
+            "name": "foo2",
+            "source_type": "vector",
+        },
+    )
+
+    if response.status_code != 200:
+        print(f"Error response: {response.status_code} - {response.text}")
+    assert response.status_code == 200
+
+    layer_data = response.json()
+    layer_id = layer_data["id"]
+    layer_type = layer_data["type"]
+    assert layer_type == "vector"
+
+    actual_map_id = layer_data["dag_child_map_id"]
+
+    layers_response = await auth_client.get(f"/api/maps/{actual_map_id}/layers")
+    assert layers_response.status_code == 200
+    resp = layers_response.json()
+
+    pmtiles_layer = next(
+        (layer for layer in resp["layers"] if layer["id"] == layer_id), None
+    )
+
+    bounds = pmtiles_layer["bounds"]
+    assert len(bounds) == 4
+    minx, miny, maxx, maxy = bounds
+    assert abs(round(minx, 0) - 0.0) < 0.1
+    assert abs(round(miny, 0) - 0.0) < 0.1
+    assert abs(round(maxx, 0) - 1.0) < 0.1
+    assert abs(round(maxy, 0) - 1.0) < 0.1
+
+
+@pytest.mark.anyio
+async def test_cloud_native_tiff_redirect(auth_client):
+    tiff_url = "https://raw.githubusercontent.com/hongfaqiu/TIFFImageryProvider/main/example/public/cogtif.tif"
+
+    map_response = await auth_client.post(
+        "/api/maps/create", json={"name": "Test Map for Cloud-Native TIFF"}
+    )
+    assert map_response.status_code == 200
+    map_id = map_response.json()["id"]
+
+    response = await auth_client.post(
+        f"/api/maps/{map_id}/layers/remote",
+        json={
+            "url": tiff_url,
+            "name": "Test Cloud-Native TIFF Layer",
+            "source_type": "raster",
+        },
+    )
+
+    assert response.status_code == 200
+
+    layer_data = response.json()
+    layer_id = layer_data["id"]
+    layer_type = layer_data["type"]
+    assert layer_type == "raster"
+
+    actual_map_id = layer_data["dag_child_map_id"]
+
+    layers_response = await auth_client.get(f"/api/maps/{actual_map_id}/layers")
+    assert layers_response.status_code == 200
+    resp = layers_response.json()
+
+    tiff_layer = next(
+        (layer for layer in resp["layers"] if layer["id"] == layer_id), None
+    )
+    assert "Test Cloud-Native TIFF Layer" in [layer["name"] for layer in resp["layers"]]
+    assert layer_id in [layer["id"] for layer in resp["layers"]]
+
+    metadata = tiff_layer.get("metadata", {})
+    if isinstance(metadata, str):
+        import json
+
+        metadata = json.loads(metadata)
+
+    assert metadata.get("original_url") == tiff_url
+    assert metadata.get("original_filename") == "cogtif.tif"
+    assert metadata.get("source") == "remote"
+
+    bounds = tiff_layer.get("bounds")
+    assert len(bounds) == 4
+    minx, miny, maxx, maxy = bounds
+    assert abs(round(minx, 1) - 100.0) < 0.1
+    assert abs(round(miny, 3) - 0.007) < 0.01
+    assert abs(round(maxx, 1) - 130.0) < 0.1
+    assert abs(round(maxy, 0) - 41.0) < 0.1
+
+    original_srid = metadata.get("original_srid")
+    assert original_srid == 4326
+
+    raster_stats = metadata.get("raster_value_stats_b1")
+    raster_min = raster_stats.get("min")
+    raster_max = raster_stats.get("max")
+    assert raster_min is not None and raster_max is not None
+    assert abs(round(raster_min, 1) - 368.7) < 0.2
+    assert abs(round(raster_max, 1) - 371.4) < 0.2

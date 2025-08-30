@@ -24,7 +24,7 @@ from fastapi import (
     Request,
     Depends,
 )
-from fastapi.responses import StreamingResponse, Response
+from fastapi.responses import StreamingResponse, Response, RedirectResponse
 from ..dependencies.db_pool import get_pooled_connection
 from ..dependencies.dag import get_layer
 from pydantic import BaseModel, Field
@@ -83,6 +83,9 @@ async def get_layer_cog_tif(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Layer is not a raster type. COG can only be generated from raster data.",
         )
+
+    if layer.remote_url and layer.remote_url.endswith(".tif"):
+        return RedirectResponse(url=layer.remote_url, status_code=302)
 
     async with get_async_db_connection() as conn:
         bucket_name = get_bucket_name()
@@ -327,6 +330,9 @@ async def get_layer_pmtiles(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Layer is not a vector type. PMTiles can only be generated from vector data.",
         )
+
+    if layer.remote_url and layer.remote_url.endswith(".pmtiles"):
+        return RedirectResponse(url=layer.remote_url, status_code=302)
 
     # Set up S3 client and bucket
     bucket_name = get_bucket_name()

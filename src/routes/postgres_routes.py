@@ -20,7 +20,11 @@ import secrets
 import json
 import csv
 import datetime
-from io import StringIO
+from io import StringIO, BytesIO
+from pathlib import Path
+from urllib.parse import urlparse
+import aiohttp
+import fiona
 from fastapi import (
     APIRouter,
     HTTPException,
@@ -60,7 +64,6 @@ from osgeo import gdal
 import subprocess
 import ipaddress
 import socket
-from urllib.parse import urlparse
 from src.symbology.llm import generate_maplibre_layers_for_layer_id
 from src.routes.layer_router import describe_layer_internal
 from ..structures import get_async_db_connection, async_conn
@@ -75,9 +78,8 @@ from typing import Callable
 from opentelemetry import trace
 from src.dag import DAGEditOperationResponse
 
-import fiona
-
 fiona.drvsupport.supported_drivers["WFS"] = "r"
+fiona.drvsupport.supported_drivers["PMTiles"] = "r"
 
 
 logger = logging.getLogger(__name__)
@@ -961,7 +963,7 @@ async def get_map_style_internal(
             # Fetch metadata as well to check for cog_url_suffix
             all_layers = await conn.fetch(
                 """
-                SELECT ml.layer_id, ml.name, ml.type, ls.style_json as maplibre_layers, ml.feature_count, ml.bounds, ml.metadata, ml.geometry_type
+                SELECT ml.layer_id, ml.name, ml.type, ls.style_json as maplibre_layers, ml.feature_count, ml.bounds, ml.metadata, ml.geometry_type, ml.remote_url
                 FROM map_layers ml
                 LEFT JOIN map_layer_styles mls ON ml.layer_id = mls.layer_id AND mls.map_id = $1
                 LEFT JOIN layer_styles ls ON mls.style_id = ls.style_id
@@ -1068,7 +1070,8 @@ async def get_map_style_internal(
         layer_id = layer["layer_id"]
 
         # Use GeoJSON or PMTiles based on the only_show_inline_sources parameter
-        if only_show_inline_sources:
+        # this is NOT possible for remote cloud native layers
+        if only_show_inline_sources and not layer.remote_url:
             # For rendering, also get a presigned URL for PMTiles if available
             metadata = json.loads(layer.get("metadata", "{}"))
             pmtiles_key = metadata.get("pmtiles_key")
@@ -1779,6 +1782,15 @@ async def internal_upload_layer(
             )
 
 
+CLOUD_NATIVE_EXTS = {".pmtiles", ".tif"}
+RASTER_EXTS = {".tif", ".jpg", ".jpeg", ".png", ".dem"}
+VECTOR_EXTS = {".pmtiles", ".geojson", ".fgb", ".gpkg", ".shp", ".csv"}
+
+ESRI_PREFIX = "ESRIJSON:"
+WFS_PREFIX = "WFS:"
+CSV_PREFIX = "CSV:"  # expected "CSV:/vsicurl/<URL>"
+
+
 @router.post(
     "/{original_map_id}/layers/remote",
     response_model=LayerUploadResponse,
@@ -1807,380 +1819,247 @@ async def add_remote_layer(
 
     validate_remote_url(request.url, request.source_type)
 
-    # Assert URL format matches the declared source type
-    if request.source_type == "sheets":
-        assert request.url.startswith("CSV:"), (
-            f"Google Sheets source must use CSV: prefix, got: {request.url}"
-        )
-    elif request.source_type == "vector":
-        # Vector sources can be direct URLs or service prefixes
-        if request.url.startswith("WFS:"):
-            # WFS URLs are valid vector sources
-            pass
-        elif request.url.startswith("ESRIJSON:"):
-            # ESRI service URLs are valid vector sources
-            pass
-        elif request.url.startswith("http"):
-            # Direct HTTP URLs for vector files
-            pass
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid vector source URL format: {request.url}",
-            )
-    elif request.source_type == "raster":
-        # Raster sources should be direct URLs
-        if not request.url.startswith("http"):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Raster sources must be HTTP URLs, got: {request.url}",
-            )
-    else:
+    url = request.url
+    declared = request.source_type
+    if declared not in {"sheets", "vector", "raster"}:
         raise HTTPException(
-            status_code=400, detail=f"Unsupported source type: {request.source_type}"
+            status_code=400, detail=f"Unsupported source type: {declared}"
+        )
+    if declared == "sheets" and not url.startswith(CSV_PREFIX):
+        raise HTTPException(
+            status_code=400, detail=f"Google Sheets must use CSV: prefix, got: {url}"
         )
 
-    # Determine file type from URL
-    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    ext = Path(parsed.path).suffix.lower()
 
-    # Check if this is a CSV source (Google Sheets)
-    if request.url.startswith("CSV:"):
-        layer_type = "vector"  # CSV is treated as vector data
+    if url.startswith(CSV_PREFIX):
+        kind = "csv"
+        ext = ".csv"
+    elif url.startswith(WFS_PREFIX):
+        kind = "wfs"
+        ext = ".gml"
+    elif url.startswith(ESRI_PREFIX):
+        kind = "esri"
+        ext = ".geojson"
     else:
-        # Regular URL - determine type from extension
-        from pathlib import Path
+        if not url.startswith(("http://", "https://")):
+            raise HTTPException(
+                status_code=400,
+                detail="Remote sources must be HTTP(S) URLs or supported service prefixes.",
+            )
+        kind = "cloud" if ext in CLOUD_NATIVE_EXTS else "http"
 
-        parsed_url = urlparse(request.url)
-        file_ext = Path(parsed_url.path).suffix.lower()
-
-        # Determine layer type based on file extension
+    # infer layer type
+    if declared == "raster":
+        layer_type = "raster"
+    elif declared in {"vector", "sheets"}:
         layer_type = "vector"
-        if file_ext in [".tif", ".tiff", ".jpg", ".jpeg", ".png", ".dem"]:
-            layer_type = "raster"
-        elif file_ext in [".geojson", ".fgb", ".gpkg", ".shp"]:
-            layer_type = "vector"
-        else:
-            # Default to vector, let validation determine if it fails
-            layer_type = "vector"
-
-        # Special handling for WFS (Web Feature Service) URLs
-        # WFS URLs contain service protocol parameters and should not use /vsicurl/ prefix
-        # Validation will be handled during processing for both WFS and regular URLs
-
-    # Handle file processing - CSV sources don't need downloading
-    import tempfile
-
-    if request.url.startswith("CSV:"):
-        # For CSV sources, we don't download - we process directly with OGR
-        # Estimate file size by getting content length
-        import aiohttp
-
-        try:
-            # Extract the actual URL from CSV:/vsicurl/URL format
-            actual_url = request.url.replace("CSV:/vsicurl/", "")
-            async with aiohttp.ClientSession() as http_session:
-                async with http_session.head(actual_url) as response:
-                    file_size_bytes = int(response.headers.get("content-length", 0))
-                    if file_size_bytes == 0:
-                        file_size_bytes = 1000  # Default estimate for CSV
-        except Exception:
-            file_size_bytes = 1000  # Default estimate if head request fails
-
-        # We'll process this directly with OGR later without downloading
-        file_content = None
-    elif (
-        "SERVICE=WFS" in request.url.upper()
-        and "REQUEST=GETFEATURE" in request.url.upper()
-    ) or request.url.startswith("WFS:"):
-        # WFS services should NOT be downloaded - they're processed directly with OGR
-        # Estimate file size for WFS (we can't really know without processing)
-        file_size_bytes = 10000  # Default estimate for WFS response
-        file_content = None
-    elif request.url.startswith("ESRIJSON:"):
-        # ESRI services should NOT be downloaded - they're processed directly with OGR
-        # Estimate file size for ESRI services (we can't really know without processing)
-        file_size_bytes = 10000  # Default estimate for ESRI response
-        file_content = None
     else:
-        # Download remote file temporarily for processing while maintaining remote status
-        import aiohttp
+        layer_type = "raster" if ext in RASTER_EXTS else "vector"
 
+    is_cloud_native = kind == "cloud"
+    if declared == "raster" and not url.startswith(("http://", "https://")):
+        raise HTTPException(
+            status_code=400, detail=f"Raster sources must be HTTP URLs, got: {url}"
+        )
+
+    temp_paths_to_cleanup: list[str] = []
+
+    if kind == "csv":
+        # "CSV:/vsicurl/<URL>"
+        ogr_source = url
+    elif kind in {"wfs", "esri"}:
+        ogr_source = url
+    elif is_cloud_native:
+        ogr_source = f"/vsicurl/{url}"
+    else:
+        # regular HTTP file: download and use internal upload
         async with aiohttp.ClientSession() as http_session:
-            async with http_session.get(request.url) as response:
-                if response.status != 200:
+            async with http_session.get(url) as resp:
+                if resp.status != 200:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Unable to download remote file: HTTP {response.status}",
+                        detail=f"Unable to download remote file: HTTP {resp.status}",
                     )
+                content = await resp.read()
 
-                file_content = await response.read()
-                file_size_bytes = len(file_content)
+        filename = Path(parsed.path).name or f"remote_file{ext}"
+        file_obj = UploadFile(
+            file=BytesIO(content),
+            filename=filename,
+            headers={"content-type": "application/octet-stream"},
+        )
 
-    # Process the file using similar logic to internal_upload_layer
-    layer_id = generate_id(prefix="L")
+        internal_response = await internal_upload_layer(
+            forked_map.id,
+            file_obj,
+            request.name,
+            request.add_layer_to_map,
+            session.get_user_id(),
+            forked_map.project_id,
+        )
 
-    # Handle file processing differently for CSV sources vs downloaded files
-    auxiliary_temp_file_path = None
-    temp_file_path = None
+        return LayerUploadResponse(
+            dag_child_map_id=forked_map.id,
+            dag_parent_map_id=original_map_id,
+            id=internal_response.id,
+            name=internal_response.name,
+            type=internal_response.type,
+            url=internal_response.url,
+            message="Remote layer processed and added successfully",
+        )
 
-    if request.url.startswith("CSV:"):
-        # For CSV sources, we work directly with the remote URL
-        # Set file extension for CSV processing
-        file_ext = ".csv"
-        ogr_source = request.url  # Use the full CSV:/vsicurl/... URL
-    elif (
-        "SERVICE=WFS" in request.url.upper()
-        and "REQUEST=GETFEATURE" in request.url.upper()
-    ):
-        # For WFS sources, we work directly with the remote URL
-        file_ext = ".gml"  # WFS typically returns GML
-        ogr_source = request.url  # Use the WFS URL directly
-    elif request.url.startswith("ESRIJSON:"):
-        # For ESRI Feature Service or Map Service URLs with ESRIJSON prefix from frontend
-        file_ext = ".geojson"  # ESRI services return GeoJSON-like data
-        ogr_source = request.url  # Use the prefixed URL as-is
-    else:
-        # Save downloaded content to temporary file for processing
-        import os
+    # external vector sources are converted to local files
+    if layer_type == "vector" and not is_cloud_native:
+        with tempfile.NamedTemporaryFile(suffix=".fgb", delete=False) as t:
+            out_path = t.name
+        os.remove(out_path)
 
-        file_ext = os.path.splitext(urlparse(request.url).path)[1]
-        with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as temp_file:
-            temp_file.write(file_content)
-            temp_file.flush()
-            temp_file_path = temp_file.name
-            ogr_source = temp_file_path
+        ogr_cmd = ["ogr2ogr", "-overwrite", "-f", "FlatGeobuf", out_path, ogr_source]
+        if ext == ".csv" or url.startswith(CSV_PREFIX):
+            ogr_cmd += [
+                "-oo",
+                "X_POSSIBLE_NAMES=lon,long,longitude,lng,x",
+                "-oo",
+                "Y_POSSIBLE_NAMES=lat,latitude,y",
+                "-oo",
+                "KEEP_GEOM_COLUMNS=NO",
+                "-a_srs",
+                "EPSG:4326",
+                "-lco",
+                "SPATIAL_INDEX=YES",
+            ]
 
-    # Convert non-FlatGeobuf vector formats to FlatGeobuf for optimal PMTiles generation
-    if layer_type == "vector" and file_ext != ".fgb":
-        # Check if non-CSV data has geometry
-        has_geometry = True
-        if file_ext != ".csv" and not request.url.startswith("CSV:"):
-            # For non-CSV files, check if they have existing geometry
-            try:
-                with fiona.open(ogr_source) as collection:
-                    # Check if schema has geometry field
-                    if not collection.schema or "geometry" not in collection.schema:
-                        has_geometry = False
-                        print("DEBUG: Non-CSV data has no geometry schema")
-                    else:
-                        # Check if any features actually have geometry
-                        if len(collection) > 0:
-                            first_feature = next(iter(collection))
-                            if (
-                                not first_feature
-                                or "geometry" not in first_feature
-                                or not first_feature["geometry"]
-                                or first_feature["geometry"]["type"] == "null"
-                            ):
-                                has_geometry = False
-                        else:
-                            has_geometry = False
-            except Exception:
-                has_geometry = True  # Default to True for non-CSV files
-
-        # Create temp file for FlatGeobuf conversion
-        import os
-        import tempfile
-
-        with tempfile.NamedTemporaryFile(suffix=".fgb", delete=False) as temp_fgb:
-            auxiliary_temp_file_path = temp_fgb.name
-        # Remove the temp file so ogr2ogr can create it fresh
-        os.remove(auxiliary_temp_file_path)
-
-        # Build ogr2ogr command - only add spatial index if data has geometry
-        ogr_cmd = [
-            "ogr2ogr",
-            "-overwrite",
-            "-f",
-            "FlatGeobuf",
-            auxiliary_temp_file_path,
-            ogr_source,
-        ]
-
-        # Add CSV-specific options for lat/lng column detection if processing CSV
-        if file_ext == ".csv" or request.url.startswith("CSV:"):
-            ogr_cmd.extend(
-                [
-                    "-oo",
-                    "X_POSSIBLE_NAMES=lon,long,longitude,lng,x",
-                    "-oo",
-                    "Y_POSSIBLE_NAMES=lat,latitude,y",
-                    "-oo",
-                    "KEEP_GEOM_COLUMNS=NO",
-                    "-a_srs",
-                    "EPSG:4326",  # Assign WGS84 CRS to CSV lat/lng data
-                ]
-            )
-            # For CSV with lat/lng columns, we can add spatial index since geometry will be created
-            ogr_cmd.extend(["-lco", "SPATIAL_INDEX=YES"])
-        elif has_geometry:
-            ogr_cmd.extend(["-lco", "SPATIAL_INDEX=YES"])
-
-        try:
-            import asyncio
-
-            process = await asyncio.create_subprocess_exec(
-                *ogr_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await process.communicate()
-
-            if process.returncode != 0:
-                raise subprocess.CalledProcessError(
-                    process.returncode, ogr_cmd, stderr=stderr.decode()
-                )
-
-            # Use the converted FlatGeobuf file for further processing
-            temp_file_path = auxiliary_temp_file_path
-            ogr_source = auxiliary_temp_file_path
-            file_ext = ".fgb"
-
-        except subprocess.CalledProcessError:
+        proc = await asyncio.create_subprocess_exec(
+            *ogr_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        _stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Failed to convert remote file to optimized format. Please check that the URL is accessible and contains valid geospatial data.",
+                detail="Failed to convert remote file to optimized format. Check URL accessibility and validity.",
             )
 
-        try:
-            # Initialize metadata dictionary
-            if request.url.startswith("CSV:"):
-                # For CSV sources, extract filename from the actual Google Sheets URL
-                actual_url = request.url.replace("CSV:/vsicurl/", "")
-                metadata_dict = {
-                    "original_url": request.url,
-                    "source": "remote",
-                    "original_filename": "Google Sheets CSV Export",
-                    "google_sheets_url": actual_url,
-                }
-            else:
-                parsed_url = urlparse(request.url)
-                metadata_dict = {
-                    "original_url": request.url,
-                    "source": "remote",
-                    "original_filename": Path(parsed_url.path).name
-                    or f"remote_file{file_ext}",
-                }
-            bounds = None
-            geometry_type = "unknown"
+        temp_paths_to_cleanup.append(out_path)
+        ogr_source = out_path
+        ext = ".fgb"
+
+    layer_id = generate_id(prefix="L")
+    metadata = {"original_url": url, "source": "remote"}
+    if url.startswith(CSV_PREFIX):
+        metadata.update(
+            {
+                "original_filename": "Google Sheets CSV Export",
+                "google_sheets_url": url.replace("CSV:/vsicurl/", ""),
+            }
+        )
+    else:
+        metadata["original_filename"] = Path(parsed.path).name or f"remote_file{ext}"
+
+    bounds = None
+    geometry_type = "unknown"
+    feature_count = None
+
+    try:
+        processing_source = ogr_source
+
+        if is_cloud_native:
+            li = await get_layer_bounds_and_metadata(processing_source, layer_type, url)
+            bounds = li["bounds"]
+            geometry_type = li["geometry_type"] if layer_type == "vector" else "raster"
+            feature_count = li["feature_count"]
+            metadata.update(li["metadata_updates"])
+            layer_result = None
+        elif layer_type == "vector":
+            layer_result = await process_vector_layer_common(
+                layer_id,
+                processing_source,
+                request.name,
+                session.get_user_id(),
+                forked_map.project_id,
+            )
+            bounds = layer_result["bounds"]
+            geometry_type = layer_result["geometry_type"]
+            feature_count = layer_result["feature_count"]
+            metadata = layer_result["metadata"]
+        else:
+            li = await get_layer_bounds_and_metadata(processing_source, layer_type, url)
+            bounds = li["bounds"]
+            geometry_type = "raster"
             feature_count = None
+            metadata.update(li["metadata_updates"])
 
-            # Process layer based on type using shared utilities
-            processing_source = temp_file_path if temp_file_path else ogr_source
+        async with get_async_db_connection() as conn:
+            await conn.fetchrow(
+                """
+                INSERT INTO map_layers
+                (layer_id, owner_uuid, name, type, metadata, bounds, geometry_type, feature_count, source_map_id, remote_url)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+                RETURNING layer_id
+                """,
+                layer_id,
+                session.get_user_id(),
+                request.name,
+                layer_type,
+                json.dumps(metadata),
+                bounds,
+                geometry_type if layer_type == "vector" else None,
+                feature_count,
+                forked_map.id,
+                url,
+            )
 
-            if layer_type == "vector":
-                # Use shared vector processing pipeline
-                layer_result = await process_vector_layer_common(
-                    layer_id,
-                    processing_source,
-                    request.name,
-                    session.get_user_id(),
-                    forked_map.project_id,
-                )
-                bounds = layer_result["bounds"]
-                geometry_type = layer_result["geometry_type"]
-                feature_count = layer_result["feature_count"]
-                # Use the processed metadata which includes PMTiles key
-                metadata_dict = layer_result["metadata"]
-                # Note: MapLibre style generation handled by process_vector_layer_common
-            else:
-                # Handle raster layers
-                layer_info = await get_layer_bounds_and_metadata(
-                    processing_source, layer_type, request.url
-                )
-                bounds = layer_info["bounds"]
-                geometry_type = "raster"
-                feature_count = None
-                metadata_dict.update(layer_info["metadata_updates"])
-
-            # Insert remote layer into database with processing metadata
-            async with get_async_db_connection() as conn:
-                await conn.fetchrow(
-                    """
-                    INSERT INTO map_layers
-                    (layer_id, owner_uuid, name, type, metadata, bounds, geometry_type, feature_count, size_bytes, source_map_id, remote_url)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-                    RETURNING layer_id
-                    """,
-                    layer_id,
-                    session.get_user_id(),
-                    request.name,
-                    layer_type,
-                    json.dumps(metadata_dict),
-                    bounds,
-                    geometry_type if layer_type == "vector" else None,
-                    feature_count,
-                    file_size_bytes,
-                    forked_map.id,
-                    request.url,  # Store original remote URL
-                )
-
-                # For vector layers, handle style creation using the style from process_vector_layer_common
-                if layer_type == "vector" and geometry_type != "unknown":
-                    # Use the MapLibre style generated by process_vector_layer_common
-                    maplibre_layers = layer_result["maplibre_style"]
-                    if maplibre_layers:
-                        style_id = generate_id(prefix="S")
-                        await conn.execute(
-                            """
-                            INSERT INTO layer_styles
-                            (style_id, layer_id, style_json, created_by)
-                            VALUES ($1, $2, $3, $4)
-                            """,
-                            style_id,
-                            layer_id,
-                            json.dumps(maplibre_layers),
-                            session.get_user_id(),
-                        )
-
-                        # Associate style with the map
-                        await conn.execute(
-                            """
-                            INSERT INTO map_layer_styles (map_id, layer_id, style_id)
-                            VALUES ($1, $2, $3)
-                            """,
-                            forked_map.id,
-                            layer_id,
-                            style_id,
-                        )
-
-                # Add to map if requested
-                if request.add_layer_to_map:
-                    map_data = await conn.fetchrow(
-                        "SELECT layers FROM user_mundiai_maps WHERE id = $1",
-                        forked_map.id,
-                    )
-                    current_layers = (
-                        map_data["layers"] if map_data and map_data["layers"] else []
-                    )
-                    new_layers = current_layers + [layer_id]
+            if (
+                layer_type == "vector"
+                and geometry_type != "unknown"
+                and not is_cloud_native
+            ):
+                maplibre_layers = layer_result["maplibre_style"]
+                if maplibre_layers:
+                    style_id = generate_id(prefix="S")
                     await conn.execute(
-                        """
-                        UPDATE user_mundiai_maps
-                        SET layers = $1, last_edited = CURRENT_TIMESTAMP
-                        WHERE id = $2
-                        """,
-                        new_layers,
+                        "INSERT INTO layer_styles (style_id, layer_id, style_json, created_by) VALUES ($1,$2,$3,$4)",
+                        style_id,
+                        layer_id,
+                        json.dumps(maplibre_layers),
+                        session.get_user_id(),
+                    )
+                    await conn.execute(
+                        "INSERT INTO map_layer_styles (map_id, layer_id, style_id) VALUES ($1,$2,$3)",
                         forked_map.id,
+                        layer_id,
+                        style_id,
                     )
 
-        finally:
-            # Clean up temp files
-            import os
+            if request.add_layer_to_map:
+                map_data = await conn.fetchrow(
+                    "SELECT layers FROM user_mundiai_maps WHERE id=$1", forked_map.id
+                )
+                current_layers = (
+                    map_data["layers"] if map_data and map_data["layers"] else []
+                )
+                await conn.execute(
+                    "UPDATE user_mundiai_maps SET layers=$1, last_edited=CURRENT_TIMESTAMP WHERE id=$2",
+                    current_layers + [layer_id],
+                    forked_map.id,
+                )
 
-            if temp_file_path and os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
-            if auxiliary_temp_file_path and os.path.exists(auxiliary_temp_file_path):
-                os.unlink(auxiliary_temp_file_path)
+    finally:
+        for p in temp_paths_to_cleanup:
+            try:
+                if p and os.path.exists(p):
+                    os.unlink(p)
+            except Exception:
+                pass
 
-    # Create layer URL
     layer_url = (
         f"/api/layer/{layer_id}.pmtiles"
         if layer_type == "vector"
         else f"/api/layer/{layer_id}.cog.tif"
     )
 
-    response = LayerUploadResponse(
+    return LayerUploadResponse(
         dag_child_map_id=forked_map.id,
         dag_parent_map_id=original_map_id,
         id=layer_id,
@@ -2189,7 +2068,6 @@ async def add_remote_layer(
         url=layer_url,
         message="Remote layer processed and added successfully",
     )
-    return response
 
 
 async def get_layer_bounds_and_metadata(
