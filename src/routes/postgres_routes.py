@@ -1071,7 +1071,7 @@ async def get_map_style_internal(
 
         # Use GeoJSON or PMTiles based on the only_show_inline_sources parameter
         # this is NOT possible for remote cloud native layers
-        if only_show_inline_sources and not layer.remote_url:
+        if only_show_inline_sources and not layer["remote_url"]:
             # For rendering, also get a presigned URL for PMTiles if available
             metadata = json.loads(layer.get("metadata", "{}"))
             pmtiles_key = metadata.get("pmtiles_key")
