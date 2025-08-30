@@ -14,13 +14,16 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import json
+import re
 from pathlib import Path
 from fastapi.openapi.utils import get_openapi
 from fastapi.routing import APIRoute
 from src.wsgi import app
-import re
 
 app.openapi_url = "/openapi.json"
+
+
+_HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
 
 
 def _canon(s: str) -> str:
@@ -56,6 +59,62 @@ def prune_redundant_titles(node):
             prune_redundant_titles(item)
 
 
+def _clean_param_list(params):
+    """
+    Remove bogus/empty query params (e.g., name=='request' or empty schema).
+    Returns a filtered list.
+    """
+    if not isinstance(params, list):
+        return params
+    cleaned = []
+    for p in params:
+        if not isinstance(p, dict):
+            continue
+        # Keep $ref unless it clearly references "request"
+        if "$ref" in p:
+            if p["$ref"].split("/")[-1].lower() == "request":
+                continue
+            cleaned.append(p)
+            continue
+        name = str(p.get("name", "")).lower()
+        loc = p.get("in")
+        schema = p.get("schema")
+        is_bogus_request = loc == "query" and name == "request"
+        is_empty_query = loc == "query" and (
+            not isinstance(schema, dict) or len(schema) == 0
+        )
+        if is_bogus_request or is_empty_query:
+            continue
+        cleaned.append(p)
+    return cleaned
+
+
+def _drop_empty_query_params(spec: dict):
+    """Strip bad query params and remove empty `parameters` arrays."""
+    comp = spec.get("components", {})
+    if isinstance(comp.get("parameters"), dict):
+        for key, p in list(comp["parameters"].items()):
+            if (
+                isinstance(p, dict)
+                and p.get("in") == "query"
+                and (str(p.get("name", "")).lower() == "request" or not p.get("schema"))
+            ):
+                del comp["parameters"][key]
+
+    for path_item in spec.get("paths", {}).values():
+        if isinstance(path_item.get("parameters"), list):
+            path_item["parameters"] = _clean_param_list(path_item["parameters"])
+            if not path_item["parameters"]:
+                path_item.pop("parameters", None)
+        for method, op in list(path_item.items()):
+            if method not in _HTTP_METHODS or not isinstance(op, dict):
+                continue
+            if isinstance(op.get("parameters"), list):
+                op["parameters"] = _clean_param_list(op["parameters"])
+                if not op["parameters"]:
+                    op.pop("parameters", None)
+
+
 def custom_openapi():
     keep_names = {
         "create_map",
@@ -75,13 +134,23 @@ def custom_openapi():
         version="0.0.1",
         summary="Mundi.ai has a developer API for creating, editing, and sharing maps and map data.",
         description="""
-These are the automatically generated API docs for Mundi's developer API. Mundi is a customizable,
-open source web GIS and can be operated via API just like it can be used as a web app. You can programatically
-create maps, upload geospatial data (vectors, raster, point clouds), and share map links or embed maps
-in other web applications.
+Mundi is a customizable, open source web GIS and can be operated via API just like it can be used as a web app. You can [programatically create maps](/developer-api/operations/create_map/), [upload geospatial data](/developer-api/operations/upload_layer_to_map/) (vectors, raster, point clouds), and share map links or embed maps in other web applications.
 
 Mundi's API is both available as a [hosted cloud service](https://mundi.ai) or
 [a self-hosted set of Docker images](https://github.com/buntinglabs/mundi.ai), open source under the AGPLv3 license.
+
+```py
+import httpx
+import os
+
+# Create a new map
+response = httpx.post(
+    "https://api.mundi.ai/api/maps/create",
+    json={"title": "My New Map"},
+    headers={"Authorization": f"Bearer {os.environ['MUNDI_API_KEY']}"}
+)
+result = response.json()
+```
 
 Mundi.ai is below the v1.0.0 release. Backwards compatibility should be achieved by pinning Mundi to a specific
 commit when self-hosting. In the near future, versioned API routes will guarantee backwards compatibility with
@@ -96,6 +165,7 @@ semver.
     )
 
     prune_redundant_titles(openapi_schema)
+    _drop_empty_query_params(openapi_schema)
 
     app.openapi_schema = openapi_schema
     return app.openapi_schema
