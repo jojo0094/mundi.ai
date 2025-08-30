@@ -108,6 +108,11 @@ You can try Mundi free at https://app.mundi.ai or self-host using Docker Compose
 					base: 'developer-api',
 					schema: './src/schema/openapi.json',
 					label: 'Developer API',
+					sidebar: {
+						operations: {
+							badges: true
+						}
+					}
 				},
 			]), starlightLinksValidator({
 				exclude: ["/developer-api/**/*", "/developer-api/"],
@@ -122,6 +127,9 @@ You can try Mundi free at https://app.mundi.ai or self-host using Docker Compose
 						: undefined,
 				},
 			],
+			customCss: [
+				'./src/assets/custom.css'
+			]
 		}),
 		sitemap(),
 	],
