@@ -2725,27 +2725,14 @@ async def get_user_maps(
         # Convert datetime objects to ISO format strings for JSON serialization
         maps_response = []
         for map_data in maps_data:
-            # Convert datetime objects to strings
-            created_on = (
-                map_data["created_on"].isoformat()
-                if isinstance(map_data["created_on"], datetime.datetime)
-                else map_data["created_on"]
-            )
-            last_edited = (
-                map_data["last_edited"].isoformat()
-                if isinstance(map_data["last_edited"], datetime.datetime)
-                else map_data["last_edited"]
-            )
-
             maps_response.append(
-                {
-                    "id": map_data["id"],
-                    "project_id": map_data["project_id"],
-                    "title": map_data["title"] or "Untitled Map",
-                    "description": map_data["description"] or "",
-                    "created_on": created_on,
-                    "last_edited": last_edited,
-                }
+                MapResponse(
+                    id=map_data["id"],
+                    project_id=map_data["project_id"],
+                    title=map_data["title"] or "Untitled Map",
+                    created_on=map_data["created_on"].isoformat(),
+                    map_link=f"{os.environ['WEBSITE_DOMAIN']}/project/{map_data['project_id']}",
+                )
             )
 
         # Return the list of maps
