@@ -106,12 +106,6 @@ export default function ProjectView() {
     },
   });
 
-  const { data: roomId } = useQuery({
-    queryKey: ['project', projectId, 'room'],
-    queryFn: () => fetch(`/api/maps/${projectId}/room`).then((res) => res.json() as Promise<{ room_id: string }>),
-    enabled: !!versionId,
-  });
-
   // tracking ephemeral state, where reloading the page will reset
   const [errors, setErrors] = useState<ErrorEntry[]>([]);
   const [activeActions, setActiveActions] = useState<EphemeralAction[]>([]);
@@ -473,7 +467,7 @@ export default function ProjectView() {
     );
   }
 
-  if (!project || !versionId || !roomId) {
+  if (!project || !versionId) {
     return (
       <div className="p-6">
         <h1 className="text-2xl font-bold mb-4">
