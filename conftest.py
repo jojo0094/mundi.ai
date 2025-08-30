@@ -132,13 +132,9 @@ async def test_map_with_vector_layers(auth_client):
 @pytest.fixture
 async def test_project_with_multiple_origins(auth_client):
     """Create a test project for testing multiple origin domains."""
-    project_payload = {"layers": []}
-    map_create_payload = {
-        "project": project_payload,
+    response = await auth_client.post("/api/maps/create", json={
         "title": "Test Project for Multiple Origins",
-        "description": "A test project for testing multiple allowed origins",
-    }
-    response = await auth_client.post("/api/maps/create", json=map_create_payload)
+    })
     assert response.status_code == 200
     return response.json()
 
@@ -170,14 +166,9 @@ def websocket_url_for_map(sync_auth_client):
 
 @pytest.fixture
 async def test_project(auth_client):
-    project_payload = {"layers": []}
-    map_create_payload = {
-        "project": project_payload,
+    response = await auth_client.post("/api/maps/create", json={
         "title": "Test Project",
-        "description": "A test project",
-    }
-
-    response = await auth_client.post("/api/maps/create", json=map_create_payload)
+    })
     assert response.status_code == 200
     map_data = response.json()
     return {"project_id": map_data["project_id"], "map_id": map_data["id"]}
@@ -185,14 +176,9 @@ async def test_project(auth_client):
 
 @pytest.fixture
 async def test_project_with_map(auth_client):
-    project_payload = {"layers": []}
-    map_create_payload = {
-        "project": project_payload,
+    response = await auth_client.post("/api/maps/create", json={
         "title": "Test Project with Map",
-        "description": "A test project with map",
-    }
-
-    response = await auth_client.post("/api/maps/create", json=map_create_payload)
+    })
     assert response.status_code == 200
     map_data = response.json()
     return {"project_id": map_data["project_id"], "map_id": map_data["id"]}
