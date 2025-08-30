@@ -2284,25 +2284,46 @@ async def generate_pmtiles_from_ogr_source(
             "-o",
             local_output_file,
             "-q",  # Quiet mode - suppress progress indicators
+            "-zg",  # Always try to guess maxzoom
+            "--drop-densest-as-needed",
+            reprojected_file,
         ]
-        if feature_count > 1:
-            tippecanoe_cmd.append(
-                "-zg"
-            )  # Can't guess maxzoom (-zg) without at least two distinct feature locations
-        tippecanoe_cmd.extend(
-            [
-                "--drop-densest-as-needed",
-                reprojected_file,
-            ]
-        )
 
-        process = await asyncio.create_subprocess_exec(*tippecanoe_cmd)
-        await process.wait()
+        process = await asyncio.create_subprocess_exec(
+            *tippecanoe_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await process.communicate()
 
         if process.returncode != 0:
-            raise Exception(
-                f"tippecanoe command failed with exit code {process.returncode}"
-            )
+            err_text = (stderr or b"").decode("utf-8", errors="ignore")
+            # If tippecanoe can't guess maxzoom for single-point datasets, fall back to ogr2ogr PMTiles
+            if (
+                "Can't guess maxzoom (-zg) without at least two distinct feature locations"
+                in err_text
+            ):
+                pmtiles_ogr_cmd = [
+                    "ogr2ogr",
+                    "-f",
+                    "PMTiles",
+                    local_output_file,
+                    reprojected_file,
+                ]
+                process2 = await asyncio.create_subprocess_exec(
+                    *pmtiles_ogr_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout2, stderr2 = await process2.communicate()
+                if process2.returncode != 0:
+                    raise Exception(
+                        f"ogr2ogr PMTiles fallback failed: {(stderr2 or b'').decode('utf-8', errors='ignore')}"
+                    )
+            else:
+                raise Exception(
+                    f"tippecanoe command failed with exit code {process.returncode}: {err_text}"
+                )
 
         # Upload the PMTiles file to S3 with user_id and project_id in path if available
         if user_id and project_id:
