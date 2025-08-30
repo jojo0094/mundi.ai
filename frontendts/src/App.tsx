@@ -18,6 +18,7 @@ import MapsList from './components/MapsList';
 import ProjectView from './components/ProjectView';
 import { ProjectsProvider } from './contexts/ProjectsContext';
 import { ApiKeys } from './lib/ee-loader';
+import NotFound from './pages/NotFound';
 import PostGISDocumentation from './pages/PostGISDocumentation';
 import './App.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -93,6 +94,8 @@ function AppContent() {
                 </SessionAuth>
               }
             />
+
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </ProjectsProvider>
       </SidebarProvider>
