@@ -38,9 +38,12 @@ class MockResponse:
 
 @pytest.fixture
 def test_map_with_layer_and_conversation(sync_auth_client):
-    map_response = sync_auth_client.post("/api/maps/create", json={
-        "title": "Chat Completion Style Test Map",
-    })
+    map_response = sync_auth_client.post(
+        "/api/maps/create",
+        json={
+            "title": "Chat Completion Style Test Map",
+        },
+    )
     assert map_response.status_code == 200
     map_id = map_response.json()["id"]
 

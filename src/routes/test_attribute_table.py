@@ -20,9 +20,12 @@ from pathlib import Path
 
 @pytest.fixture(scope="session")
 async def test_map_with_airports_layer(auth_client):
-    map_response = await auth_client.post("/api/maps/create", json={
-        "title": "Attribute Table Test Map",
-    })
+    map_response = await auth_client.post(
+        "/api/maps/create",
+        json={
+            "title": "Attribute Table Test Map",
+        },
+    )
     assert map_response.status_code == 200, f"Failed to create map: {map_response.text}"
     map_id = map_response.json()["id"]
 
@@ -50,9 +53,12 @@ async def test_map_with_airports_layer(auth_client):
 
 @pytest.fixture(scope="session")
 async def test_map_with_counties_layer(auth_client):
-    map_response = await auth_client.post("/api/maps/create", json={
-        "title": "Counties Attribute Table Test Map",
-    })
+    map_response = await auth_client.post(
+        "/api/maps/create",
+        json={
+            "title": "Counties Attribute Table Test Map",
+        },
+    )
     assert map_response.status_code == 200, f"Failed to create map: {map_response.text}"
     map_id = map_response.json()["id"]
 

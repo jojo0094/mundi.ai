@@ -23,10 +23,13 @@ from openai import BadRequestError
 def test_map_fixture(sync_auth_client):
     map_title = f"Test Context Length Error Map {uuid.uuid4()}"
 
-    response = sync_auth_client.post("/api/maps/create", json={
-        "title": map_title,
-        "link_accessible": True,
-    })
+    response = sync_auth_client.post(
+        "/api/maps/create",
+        json={
+            "title": map_title,
+            "link_accessible": True,
+        },
+    )
     assert response.status_code == 200
     data = response.json()
     return {"map_id": data["id"], "project_id": data["project_id"]}
