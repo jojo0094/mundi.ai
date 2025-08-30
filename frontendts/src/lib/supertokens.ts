@@ -45,6 +45,11 @@ export default async function initSupertokens() {
     [data-supertokens~="container"] {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
+    [data-supertokens~=container] {
+      --palette-primary: 193, 250, 61;        /* button bg, focus, etc. */
+      --palette-primaryBorder: 193, 250, 61;  /* button border */
+      --palette-buttonText: 0, 0, 0;          /* black text for contrast */
+    }
     [data-supertokens] a[href*="supertokens.com"] {
       display: none !important;
     }`,
