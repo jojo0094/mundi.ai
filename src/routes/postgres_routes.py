@@ -645,7 +645,7 @@ async def get_map_layers(
         # Get all layers by their IDs using ANY() instead of f-string
         layers = await conn.fetch(
             """
-            SELECT layer_id as id, name, type, raster_cog_url, metadata, bounds, geometry_type, feature_count
+            SELECT layer_id as id, name, type, metadata, bounds, geometry_type, feature_count
             FROM map_layers
             WHERE layer_id = ANY($1)
             ORDER BY id

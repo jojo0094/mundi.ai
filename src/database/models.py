@@ -168,7 +168,7 @@ class MapLayer(Base):
     type = Column(
         String, nullable=False
     )  # 'vector', 'raster', 'postgis', 'point_cloud'
-    raster_cog_url = Column(String)  # Can be NULL
+    raster_cog_url = Column(String)  # DEPRECATED: unused field, can be NULL
     postgis_connection_id = Column(
         String(12), ForeignKey("project_postgres_connections.id")
     )
