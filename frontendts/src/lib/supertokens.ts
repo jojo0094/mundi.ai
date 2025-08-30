@@ -39,10 +39,14 @@ export default async function initSupertokens() {
       apiBasePath: '/supertokens',
       websiteBasePath: '/auth',
     },
+    defaultToSignUp: true,
     recipeList,
     style: `
     [data-supertokens~="container"] {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    [data-supertokens] a[href*="supertokens.com"] {
+      display: none !important;
     }`,
   });
 }
