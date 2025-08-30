@@ -139,22 +139,30 @@ Mundi is a customizable, open source web GIS and can be operated via API just li
 Mundi's API is both available as a [hosted cloud service](https://mundi.ai) or
 [a self-hosted set of Docker images](https://github.com/buntinglabs/mundi.ai), open source under the AGPLv3 license.
 
+To get started, create an account at [Mundi.ai](https://app.mundi.ai) and create a new API key [here](https://app.mundi.ai/settings/api-keys).
+When sending requests, set the `Authorization` header to `Bearer YOUR_API_KEY`. API keys start with `sk-...`. Never share your API keys.
+
 ```py
-import httpx
-import os
-
-# Create a new map
-response = httpx.post(
+# 1. create a new map project
+created_map = httpx.post(
     "https://api.mundi.ai/api/maps/create",
-    json={"title": "My New Map"},
-    headers={"Authorization": f"Bearer {os.environ['MUNDI_API_KEY']}"}
-)
-result = response.json()
-```
+    json={"title": "US political boundaries"},
+    headers={"Authorization": f"Bearer {os.environ["MUNDI_API_KEY"]}"},
+).json()
+map_id, project_id = created_map["id"], created_map["project_id"]
 
-Mundi.ai is below the v1.0.0 release. Backwards compatibility should be achieved by pinning Mundi to a specific
-commit when self-hosting. In the near future, versioned API routes will guarantee backwards compatibility with
-semver.
+# 2. upload a GeoJSON file as a layer on that map
+with open("counties.geojson", "rb") as f:
+    upload = httpx.post(
+        f"https://api.mundi.ai/api/maps/{map_id}/layers",
+        files={"file": ("counties.geojson", f, "application/geo+json")},
+        data={"layer_name": "US Counties", "add_layer_to_map": True},
+        headers={"Authorization": f"Bearer {os.environ["MUNDI_API_KEY"]}"},
+    ).json()
+
+# 3. link to view the map with the uploaded layer
+print(f"https://app.mundi.ai/project/{project_id}/{map_id}")
+```
 """,
         routes=selected_routes,
         terms_of_service="https://buntinglabs.com/legal/terms",

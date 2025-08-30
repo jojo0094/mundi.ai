@@ -21,13 +21,9 @@ from pathlib import Path
 
 @pytest.fixture
 async def test_map_with_layer(auth_client):
-    map_payload = {
-        "project": {"layers": [], "crs": {"epsg_code": 3857}},
+    map_response = await auth_client.post("/api/maps/create", json={
         "title": "Geoprocessing Test Map",
-        "description": "Test map for geoprocessing operations",
-    }
-
-    map_response = await auth_client.post("/api/maps/create", json=map_payload)
+    })
     assert map_response.status_code == 200, f"Failed to create map: {map_response.text}"
     map_id = map_response.json()["id"]
 
@@ -56,13 +52,9 @@ async def test_map_with_layer(auth_client):
 
 @pytest.fixture
 async def test_map_with_airports_layer(auth_client):
-    map_payload = {
-        "project": {"layers": [], "crs": {"epsg_code": 3857}},
+    map_response = await auth_client.post("/api/maps/create", json={
         "title": "Airports Test Map",
-        "description": "Test map for GeoJSON airport layers",
-    }
-
-    map_response = await auth_client.post("/api/maps/create", json=map_payload)
+    })
     assert map_response.status_code == 200, f"Failed to create map: {map_response.text}"
     map_id = map_response.json()["id"]
 

@@ -37,14 +37,13 @@ class MockResponse:
 @pytest.fixture
 def test_map_fixture(sync_auth_client):
     # Create a map with a project embedded
-    project_payload = {"layers": []}
-    map_create_payload = {
-        "project": project_payload,
-        "title": f"Test Message Loop Map {uuid.uuid4()}",
-        "description": "Map for testing message loop",
-        "link_accessible": True,
-    }
-    response = sync_auth_client.post("/api/maps/create", json=map_create_payload)
+    response = sync_auth_client.post(
+        "/api/maps/create",
+        json={
+            "title": f"Test Message Loop Map {uuid.uuid4()}",
+            "link_accessible": True,
+        },
+    )
     assert response.status_code == 200
     data = response.json()
     map_id = data["id"]
@@ -348,15 +347,13 @@ async def test_sequential_response_handling(
 async def test_map_locking_prevents_concurrent_requests(auth_client):
     import asyncio
 
-    project_payload = {"layers": []}
-    map_data = {
-        "project": project_payload,
-        "title": f"Test Lock Map {uuid.uuid4()}",
-        "description": "Map for testing locking",
-        "link_accessible": True,
-    }
-
-    map_response = await auth_client.post("/api/maps/create", json=map_data)
+    map_response = await auth_client.post(
+        "/api/maps/create",
+        json={
+            "title": f"Test Lock Map {uuid.uuid4()}",
+            "link_accessible": True,
+        },
+    )
     assert map_response.status_code == 200
     map_id = map_response.json()["id"]
 

@@ -23,7 +23,7 @@ import pytest
 @pytest.mark.anyio
 async def test_zip_shapefile_upload(auth_client):
     # Create a temporary map for testing
-    project = {"layers": []}
+    project = {}
 
     payload = {
         "project": project,
@@ -98,7 +98,7 @@ async def test_zip_shapefile_upload(auth_client):
 
 @pytest.mark.anyio
 async def test_zip_shapefile_upload_macosx(auth_client):
-    project = {"layers": []}
+    project = {}
 
     payload = {
         "project": project,
@@ -163,7 +163,7 @@ async def test_zip_shapefile_upload_macosx(auth_client):
 @pytest.mark.anyio
 async def test_invalid_zip_file_upload(auth_client):
     # Create a temporary map for testing
-    project = {"layers": []}
+    project = {}
 
     payload = {
         "project": project,

@@ -35,7 +35,6 @@ async def test_create_map_and_update_basemap(auth_client, expected_basemaps):
     # First create a map
     create_payload = {
         "title": "Basemap Test Map",
-        "description": "A test map for basemap functionality",
     }
     create_response = await auth_client.post("/api/maps/create", json=create_payload)
     assert create_response.status_code == 200
@@ -77,7 +76,6 @@ async def test_create_map_and_update_basemap_to_openstreetmap(
     # First create a map
     create_payload = {
         "title": "First Style Test Map",
-        "description": "A test map for first basemap style",
     }
     create_response = await auth_client.post("/api/maps/create", json=create_payload)
     assert create_response.status_code == 200

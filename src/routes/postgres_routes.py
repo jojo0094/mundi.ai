@@ -234,9 +234,6 @@ class MapCreateRequest(BaseModel):
     title: str = Field(
         default="Untitled Map", description="Display name for the new map"
     )
-    description: str = Field(
-        default="", description="Optional description of the map's purpose or contents"
-    )
 
 
 class MapResponse(BaseModel):
@@ -245,11 +242,8 @@ class MapResponse(BaseModel):
         description="ID of the project containing this map. Projects can contain multiple related maps."
     )
     title: str = Field(description="Display name of the map")
-    description: str = Field(
-        description="Optional description of the map's purpose or contents"
-    )
     created_on: str = Field(description="ISO timestamp when the map was created")
-    last_edited: str = Field(description="ISO timestamp when the map was last modified")
+    map_link: str = Field(description="URL to view the map project")
 
 
 class UserMapsResponse(BaseModel):
@@ -326,19 +320,34 @@ class MapUpdateRequest(BaseModel):
     "/create",
     response_model=MapResponse,
     operation_id="create_map",
-    summary="Create a map project",
+    summary="Create a new map",
 )
 async def create_map(
     map_request: MapCreateRequest,
     session: UserContext = Depends(verify_session_required),
 ):
-    """Creates a new map project.
+    """Creates a new map project. Projects contain multiple map versions ("maps"),
+    unattached layer data, and a history of changes to the project. Each edit will
+    create a new map version.
 
-    This endpoint returns both a map id `id` and project id `project_id`. Projects
-    can contain multiple map versions ("maps"), unattached layer data, and details
-    a history of changes to the project. Each edit will create a new map version.
+    Accepts `title` in the request body. Returns overarching project id
+    `project_id` and initial map version id `id`.
 
-    Accepts both `title` and `description` in the request body.
+    ```py
+    result = httpx.post(
+        "https://api.mundi.ai/api/maps/create",
+        json={"title": "Brazilian catchment areas"},
+        headers={"Authorization": f"Bearer {os.environ['MUNDI_API_KEY']}"}
+    ).json()
+
+    assert result == {
+        "title": "Brazilian catchment areas",
+        "created_on": "2025-08-29T12:34:56.789Z",
+        "map_link": "https://app.mundi.ai/project/PGJSkB1zj7fT",
+        "id": "Mabc123def456",
+        "project_id": "PGJSkB1zj7fT"
+    }
+    ```
     """
     owner_id = session.get_user_id()
 
@@ -365,15 +374,14 @@ async def create_map(
         result = await conn.fetchrow(
             """
             INSERT INTO user_mundiai_maps
-            (id, project_id, owner_uuid, title, description, display_as_diff)
-            VALUES ($1, $2, $3, $4, $5, TRUE)
-            RETURNING id, title, description, created_on, last_edited
+            (id, project_id, owner_uuid, title, display_as_diff)
+            VALUES ($1, $2, $3, $4, TRUE)
+            RETURNING id, title, created_on
             """,
             map_id,
             project_id,
             owner_id,
             map_request.title,
-            map_request.description,
         )
 
         # Validate the result
@@ -384,13 +392,13 @@ async def create_map(
             )
 
         # Return the created map data
+        website_domain = os.environ.get("WEBSITE_DOMAIN", "https://app.mundi.ai")
         return MapResponse(
             id=map_id,
             project_id=project_id,
             title=result["title"],
-            description=result["description"],
             created_on=result["created_on"].isoformat(),
-            last_edited=result["last_edited"].isoformat(),
+            map_link=f"{website_domain}/project/{project_id}",
         )
 
 
@@ -1209,6 +1217,23 @@ async def upload_layer(
 
     Returns the new layer details including its unique layer ID. The layer can optionally not be added to the map,
     but will be faster to add to an existing map later.
+
+    ```py
+    with open("brazil_watersheds.gpkg", "rb") as f:
+        # project ID is PGJSkB1zj7fT, previous map ID is M4NzE8rk4FZS
+        result = httpx.post(
+            f"https://api.mundi.ai/api/maps/M4NzE8rk4FZS/layers",
+            files={"file": ("brazil_watersheds.gpkg", f, "application/octet-stream")},
+            data={"layer_name": "Amazon Basin Watersheds", "add_layer_to_map": True},
+            headers={"Authorization": f"Bearer {os.environ['MUNDI_API_KEY']}"}
+        ).json()
+
+    assert result["name"] == "Amazon Basin Watersheds"
+    assert result["dag_child_map_id"] == "M4NzE8rk4FZS"
+    # use result["dag_child_map_id"] as the new map id, and view this new uploaded layer
+    # by navigating to https://app.mundi.ai/project/PGJSkB1zj7fT/M4NzE8rk4FZS
+    subprocess.run(["open", "https://app.mundi.ai/project/PGJSkB1zj7fT/M4NzE8rk4FZS"])
+    ```
     """
     layer_result = await internal_upload_layer(
         map_id=forked_map.id,

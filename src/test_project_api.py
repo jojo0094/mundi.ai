@@ -21,14 +21,9 @@ async def test_project_deletion(auth_client):
     """Test creating a project, deleting it, and verifying it no longer appears in user projects."""
 
     # 1. Create a new project
-    project_payload = {"layers": []}
-    map_create_payload = {
-        "project": project_payload,
+    response = await auth_client.post("/api/maps/create", json={
         "title": "Test Project for Deletion",
-        "description": "A project to test deletion functionality",
-    }
-
-    response = await auth_client.post("/api/maps/create", json=map_create_payload)
+    })
     response.raise_for_status()
     map_data = response.json()
     project_id = map_data["project_id"]
@@ -87,13 +82,9 @@ async def test_project_deletion(auth_client):
 
 @pytest.mark.anyio
 async def test_project_title_update(auth_client):
-    map_create_payload = {
-        "project": {"layers": []},
+    response = await auth_client.post("/api/maps/create", json={
         "title": "New Map",
-        "description": "",
-    }
-
-    response = await auth_client.post("/api/maps/create", json=map_create_payload)
+    })
     response.raise_for_status()
     map_data = response.json()
     project_id = map_data["project_id"]
