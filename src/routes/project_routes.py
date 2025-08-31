@@ -53,6 +53,10 @@ from src.dependencies.database_documenter import (
     DatabaseDocumenter,
     get_database_documenter,
 )
+from src.dependencies.chat_completions import (
+    ChatArgsProvider,
+    get_chat_args_provider,
+)
 from src.dependencies.postgres_connection import (
     PostgresConnectionManager,
     get_postgres_connection_manager,
@@ -475,6 +479,7 @@ async def add_postgis_connection(
     connection_manager: PostgresConnectionManager = Depends(
         get_postgres_connection_manager
     ),
+    chat_args_provider: ChatArgsProvider = Depends(get_chat_args_provider),
 ):
     """
     Add a PostgreSQL connection URI to a project.
@@ -537,6 +542,8 @@ async def add_postgis_connection(
             connection_data.connection_name or "Database",
             connection_manager,
             get_openai_client(request),
+            chat_args_provider,
+            user_id,
         )
 
         return PostgresCreateConnectionResponse(
@@ -657,6 +664,8 @@ async def regenerate_database_documentation(
     connection_manager: PostgresConnectionManager = Depends(
         get_postgres_connection_manager
     ),
+    chat_args_provider: ChatArgsProvider = Depends(get_chat_args_provider),
+    session: UserContext = Depends(verify_session_required),
 ):
     async with get_async_db_connection() as conn:
         # Get the database connection
@@ -677,6 +686,7 @@ async def regenerate_database_documentation(
             )
 
         # Start background task to regenerate database documentation
+        user_id = session.get_user_id()
         background_tasks.add_task(
             database_documenter.generate_documentation,
             connection_id,
@@ -684,6 +694,8 @@ async def regenerate_database_documentation(
             connection["connection_name"] or "Database",
             connection_manager,
             get_openai_client(request),
+            chat_args_provider,
+            user_id,
         )
 
         return PostgresConnectionResponse(
