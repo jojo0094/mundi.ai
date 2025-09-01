@@ -99,8 +99,6 @@ app.include_router(
 )
 
 
-
-
 # TODO: this isn't useful right now. But we should work on it in the future
 # mcp = FastApiMCP(
 #     app,

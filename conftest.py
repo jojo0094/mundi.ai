@@ -132,9 +132,12 @@ async def test_map_with_vector_layers(auth_client):
 @pytest.fixture
 async def test_project_with_multiple_origins(auth_client):
     """Create a test project for testing multiple origin domains."""
-    response = await auth_client.post("/api/maps/create", json={
-        "title": "Test Project for Multiple Origins",
-    })
+    response = await auth_client.post(
+        "/api/maps/create",
+        json={
+            "title": "Test Project for Multiple Origins",
+        },
+    )
     assert response.status_code == 200
     return response.json()
 
@@ -166,9 +169,12 @@ def websocket_url_for_map(sync_auth_client):
 
 @pytest.fixture
 async def test_project(auth_client):
-    response = await auth_client.post("/api/maps/create", json={
-        "title": "Test Project",
-    })
+    response = await auth_client.post(
+        "/api/maps/create",
+        json={
+            "title": "Test Project",
+        },
+    )
     assert response.status_code == 200
     map_data = response.json()
     return {"project_id": map_data["project_id"], "map_id": map_data["id"]}
@@ -176,9 +182,12 @@ async def test_project(auth_client):
 
 @pytest.fixture
 async def test_project_with_map(auth_client):
-    response = await auth_client.post("/api/maps/create", json={
-        "title": "Test Project with Map",
-    })
+    response = await auth_client.post(
+        "/api/maps/create",
+        json={
+            "title": "Test Project with Map",
+        },
+    )
     assert response.status_code == 200
     map_data = response.json()
     return {"project_id": map_data["project_id"], "map_id": map_data["id"]}
@@ -215,5 +224,5 @@ def expected_basemaps():
     return {
         "available_styles": ["openstreetmap", "openfreemap"],
         "first_style": "openstreetmap",
-        "default_style_name": "OpenStreetMap"
+        "default_style_name": "OpenStreetMap",
     }
