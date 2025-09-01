@@ -5,9 +5,9 @@ import type { Accept } from 'react-dropzone';
 import { useDropzone } from 'react-dropzone';
 import { useNavigate, useParams } from 'react-router-dom';
 import useWebSocket from 'react-use-websocket';
-import Session from 'supertokens-auth-react/recipe/session';
 import MapLibreMap from './MapLibreMap';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { getJwt } from '@mundi/ee';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Map as MLMap } from 'maplibre-gl';
 import { toast } from 'sonner';
@@ -33,7 +33,6 @@ const DROPZONE_ACCEPT: Accept = {
 export default function ProjectView() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const sessionContext = Session.useSessionContext();
 
   const { projectId, versionIdParam } = useParams();
 
@@ -161,18 +160,6 @@ export default function ProjectView() {
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const [jwt, setJwt] = useState<string | undefined>(undefined);
 
-  // authenticating web sockets
-  useEffect(() => {
-    const getSessionData = async () => {
-      if (await Session.doesSessionExist()) {
-        const accessToken = await Session.getAccessToken();
-
-        setJwt(accessToken);
-      }
-    };
-    getSessionData();
-  }, []);
-
   const wsUrl = useMemo(() => {
     if (!conversationId) {
       return null;
@@ -182,6 +169,17 @@ export default function ProjectView() {
 
     return `${wsProtocol}//${window.location.host}/api/maps/ws/${conversationId}/messages/updates?token=${jwt}`;
   }, [conversationId, wsProtocol, jwt]);
+
+  // If EE is present, fetch a JWT for authenticated websockets
+  useEffect(() => {
+    let mounted = true;
+    getJwt().then((token: string | undefined) => {
+      if (mounted && token) setJwt(token);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Track page visibility and allow socket to remain open for 10 minutes after hidden
   const WS_REMAIN_OPEN_FOR_MS = 10 * 60 * 1000; // 10 minutes
@@ -216,7 +214,7 @@ export default function ProjectView() {
   }, []);
 
   // WebSocket using react-use-websocket - only connect when in a conversation
-  const shouldConnect = !sessionContext.loading && conversationId !== null && (isTabVisible || !hiddenTimeoutExpired);
+  const shouldConnect = conversationId !== null && (isTabVisible || !hiddenTimeoutExpired);
   const backoffMs = [30, 1_000, 5_000, 15_000, 50_000];
   const { lastMessage, readyState } = useWebSocket(
     wsUrl,
@@ -450,22 +448,6 @@ export default function ProjectView() {
   const toggleLayerVisibility = (layerId: string) => {
     setHiddenLayerIDs((prev) => (prev.includes(layerId) ? prev.filter((id) => id !== layerId) : [...prev, layerId]));
   };
-
-  if (sessionContext.loading) {
-    return <div className="p-6">Loading session...</div>;
-  }
-
-  if (!sessionContext.doesSessionExist) {
-    return (
-      <div className="p-6">
-        <h1 className="text-2xl font-bold mb-4">Map View</h1>
-        <p>Please log in to view this map.</p>
-        <a href="/auth" className="text-blue-500 hover:underline">
-          Login
-        </a>
-      </div>
-    );
-  }
 
   if (!project || !versionId) {
     return (

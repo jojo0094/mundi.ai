@@ -13,11 +13,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import os
-import base64
-import json
-import time
-import uuid
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
@@ -117,41 +112,6 @@ app.include_router(
 # )
 # mcp.mount()
 
-
-@app.post("/supertokens/session/refresh")
-async def mock_session_refresh(request: Request):
-    # it's simpler for self hosters to not have to log in, and there's a big
-    # gap between a simple, self hostable app and a secure, multi tenant, public
-    # facing software
-    if os.environ.get("MUNDI_AUTH_MODE") == "edit":
-        # Create fake refresh response
-        expiry = int(time.time() * 1000) + 3600 * 1000  # 1 hour
-        front_token = base64.b64encode(
-            json.dumps({"uid": "demo", "ate": expiry, "up": {}}).encode()
-        ).decode()
-
-        id_refresh = str(uuid.uuid4())
-        anti_csrf = str(uuid.uuid4())
-        access_tok = f"dummyAccess.{uuid.uuid4()}"
-        refresh_tok = f"dummyRefresh.{uuid.uuid4()}"
-
-        response = JSONResponse(status_code=200, content={})
-
-        # Headers
-        response.headers["front-token"] = front_token
-        response.headers["id-refresh-token"] = id_refresh
-        response.headers["anti-csrf"] = anti_csrf
-        response.headers["access-control-expose-headers"] = (
-            "front-token, id-refresh-token, anti-csrf"
-        )
-        response.headers["access-control-allow-credentials"] = "true"
-
-        # Cookies
-        response.set_cookie("sAccessToken", access_tok, httponly=True)
-        response.set_cookie("sRefreshToken", refresh_tok, httponly=True)
-        response.set_cookie("sIdRefreshToken", id_refresh, httponly=True)
-
-        return response
 
 
 app.mount("/assets", StaticFiles(directory="frontendts/dist/assets"), name="spa-assets")

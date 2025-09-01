@@ -1,26 +1,22 @@
 // Copyright Bunting Labs, Inc. 2025
 
 import { cogProtocol } from '@geomatico/maplibre-cog-protocol';
+import { ApiKeys } from '@mundi/ee';
 import maplibregl from 'maplibre-gl';
 import { Protocol } from 'pmtiles';
 import { useEffect } from 'react';
 import * as reactRouterDom from 'react-router-dom';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
-import { SuperTokensWrapper } from 'supertokens-auth-react';
-import { EmailPasswordPreBuiltUI } from 'supertokens-auth-react/recipe/emailpassword/prebuiltui';
-import { EmailVerificationPreBuiltUI } from 'supertokens-auth-react/recipe/emailverification/prebuiltui';
-import { SessionAuth } from 'supertokens-auth-react/recipe/session';
-import { getSuperTokensRoutesForReactRouterDom } from 'supertokens-auth-react/ui';
 import { AppSidebar } from '@/components/app-sidebar';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/sonner';
 import MapsList from './components/MapsList';
 import ProjectView from './components/ProjectView';
 import { ProjectsProvider } from './contexts/ProjectsContext';
-import { ApiKeys } from './lib/ee-loader';
 import NotFound from './pages/NotFound';
 import PostGISDocumentation from './pages/PostGISDocumentation';
 import './App.css';
+import { Routes as EERoutes, Provider, RequireAuth } from '@mundi/ee';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Suspense } from 'react';
 
@@ -28,12 +24,6 @@ const websiteDomain = import.meta.env.VITE_WEBSITE_DOMAIN;
 if (!websiteDomain) {
   throw new Error('VITE_WEBSITE_DOMAIN is not defined. Please set it in your .env file or build environment.');
 }
-
-const emailVerificationMode = import.meta.env.VITE_EMAIL_VERIFICATION;
-if (emailVerificationMode !== 'require' && emailVerificationMode !== 'disable') {
-  throw new Error("VITE_EMAIL_VERIFICATION must be either 'require' or 'disable'");
-}
-const emailVerificationEnabled = emailVerificationMode === 'require';
 
 function AppContent() {
   useEffect(() => {
@@ -53,45 +43,40 @@ function AppContent() {
           <AppSidebar />
 
           <Routes>
-            {/* SuperTokens Routes for authentication UI */}
-            {getSuperTokensRoutesForReactRouterDom(
-              reactRouterDom,
-              emailVerificationEnabled ? [EmailPasswordPreBuiltUI, EmailVerificationPreBuiltUI] : [EmailPasswordPreBuiltUI],
-            )}
-
+            {EERoutes(reactRouterDom)}
             {/* App Routes */}
             <Route
               path="/"
               element={
-                <SessionAuth>
+                <RequireAuth>
                   <MapsList />
-                </SessionAuth>
+                </RequireAuth>
               }
             />
             <Route
               path="/project/:projectId/:versionIdParam?"
               element={
-                <SessionAuth>
+                <RequireAuth>
                   <ProjectView />
-                </SessionAuth>
+                </RequireAuth>
               }
             />
             <Route
               path="/postgis/:connectionId"
               element={
-                <SessionAuth>
+                <RequireAuth>
                   <PostGISDocumentation />
-                </SessionAuth>
+                </RequireAuth>
               }
             />
             <Route
               path="/settings/api-keys"
               element={
-                <SessionAuth>
-                  <Suspense fallback={<div>Loading...</div>}>
+                <Suspense fallback={<div>Loading...</div>}>
+                  <RequireAuth>
                     <ApiKeys />
-                  </Suspense>
-                </SessionAuth>
+                  </RequireAuth>
+                </Suspense>
               }
             />
 
@@ -114,10 +99,10 @@ const queryClient = new QueryClient({
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <SuperTokensWrapper>
+      <Provider>
         <AppContent />
         <Toaster />
-      </SuperTokensWrapper>
+      </Provider>
     </QueryClientProvider>
   );
 }
