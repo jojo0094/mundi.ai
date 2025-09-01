@@ -183,6 +183,26 @@ is not accessible from the internet, either due to a firewall or the database is
 network. In order to be accessible, the database must be pinned to a public static IPv4 address
 allowing ingress and egress traffic.
 
+#### SSL connection rejected
+
+If your Postgres database doesn't have SSL configured correctly, by default Mundi
+will give you an error when connecting to it:
+
+```
+ConnectionError: PostgreSQL server at "..." rejected SSL upgrade
+```
+
+**Option 1: Enable SSL:** Enable SSL connections on your PostgreSQL server. This involves
+editing `pg_hba.conf`. Either ask your database administrator, or follow a
+tutorial online.
+
+**Option 2: Disable SSL (insecure)**: Instructs Mundi to not encrypt data when connecting. Add `?sslmode=disable` to your connection string. This will make the connection work, but result in data
+from your database being sent unencrypted through the Internet:
+
+```
+postgresql://user:pass@hostname:5432/db?sslmode=disable
+```
+
 ## Row Level Security (RLS)
 
 :::note[Advanced configuration]
