@@ -4,6 +4,7 @@ import starlight from '@astrojs/starlight';
 import starlightLlmsTxt from 'starlight-llms-txt';
 import sitemap from '@astrojs/sitemap';
 import starlightOpenAPI, { openAPISidebarGroups } from 'starlight-openapi';
+import starlightSidebarTopics from 'starlight-sidebar-topics';
 import starlightLinksValidator from 'starlight-links-validator';
 import starlightThemeRapide from 'starlight-theme-rapide'
 
@@ -23,54 +24,6 @@ export default defineConfig({
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/BuntingLabs/mundi.ai' },
 				{ icon: 'discord', label: 'Discord', href: 'https://discord.gg/V63VbgH8dT' }
 			],
-			sidebar: [
-				{
-					label: 'Introduction',
-					slug: 'index',
-				},
-				{
-					label: 'Getting started',
-					items: [
-						{ label: 'Making your first map', slug: 'getting-started/making-your-first-map' },
-						{ label: 'Uploading files', slug: 'getting-started/uploading-files' },
-						{
-							label: 'Remote sources',
-							collapsed: true,
-							items: [
-								{ label: 'WFS', slug: 'getting-started/add-ogc-wfs-web-feature-service' },
-								{ label: 'ESRI Feature Server', slug: 'getting-started/esri-feature-server' },
-								{ label: 'Google Sheets', slug: 'getting-started/google-sheets' },
-							],
-						},
-					],
-				},
-				{
-					label: 'Spatial databases',
-					items: [
-						{ label: 'Connecting to PostGIS', slug: 'spatial-databases/connecting-to-postgis' },
-						{ label: 'Querying and styling from SQL', slug: 'spatial-databases/querying-and-styling-from-sql' },
-					],
-				},
-				{
-					label: 'Guides',
-					items: [
-						{ label: 'Geoprocessing from QGIS', slug: 'guides/geoprocessing-from-qgis' },
-						{ label: 'Visualizing point clouds', slug: 'guides/visualizing-point-clouds-las-laz' },
-						{ label: 'Switching basemaps', slug: 'guides/switching-basemaps-satellite-or-traditional-vector' },
-						{ label: 'Embedding into websites', slug: 'guides/embedding-maps-into-websites' },
-					],
-				},
-				{
-					label: 'Deployment configurations',
-					items: [
-						{ label: 'Self-hosting Mundi', slug: 'deployments/self-hosting-mundi' },
-						{ label: 'On-Premise/VPC Kubernetes', slug: 'deployments/on-premise-vpc-kubernetes-deployment' },
-						{ label: 'Using a local LLM with Ollama', slug: 'deployments/connecting-to-local-llm-with-ollama' },
-						{ label: 'Air-gapped deployments', slug: 'deployments/air-gapped' }
-					]
-				},
-				...openAPISidebarGroups,
-			],
 			// Set English as the default language for this site.
 			defaultLocale: 'root',
 			locales: {
@@ -80,7 +33,68 @@ export default defineConfig({
 					lang: 'en',
 				},
 			},
-			plugins: [starlightLlmsTxt({
+			plugins: [
+				starlightSidebarTopics([
+					{
+						label: 'Documentation',
+						icon: 'open-book',
+						link: '/',
+						items: [
+							{
+								label: 'Getting started',
+								items: [
+									{ label: 'Making your first map', slug: 'getting-started/making-your-first-map' },
+									{ label: 'Uploading files', slug: 'getting-started/uploading-files' },
+									{
+										label: 'Remote sources',
+										collapsed: true,
+										items: [
+											{ label: 'WFS', slug: 'getting-started/add-ogc-wfs-web-feature-service' },
+											{ label: 'ESRI Feature Server', slug: 'getting-started/esri-feature-server' },
+											{ label: 'Google Sheets', slug: 'getting-started/google-sheets' },
+										],
+									},
+								],
+							},
+							{
+								label: 'Spatial databases',
+								items: [
+									{ label: 'Connecting to PostGIS', slug: 'spatial-databases/connecting-to-postgis' },
+									{ label: 'Querying and styling from SQL', slug: 'spatial-databases/querying-and-styling-from-sql' },
+								],
+							},
+							{
+								label: 'Guides',
+								items: [
+									{ label: 'Geoprocessing from QGIS', slug: 'guides/geoprocessing-from-qgis' },
+									{ label: 'Visualizing point clouds', slug: 'guides/visualizing-point-clouds-las-laz' },
+									{ label: 'Switching basemaps', slug: 'guides/switching-basemaps-satellite-or-traditional-vector' },
+									{ label: 'Embedding into websites', slug: 'guides/embedding-maps-into-websites' },
+								],
+							},
+							{
+								label: 'Deployment configurations',
+								items: [
+									{ label: 'Self-hosting Mundi', slug: 'deployments/self-hosting-mundi' },
+									{ label: 'On-Premise/VPC Kubernetes', slug: 'deployments/on-premise-vpc-kubernetes-deployment' },
+									{ label: 'Using a local LLM with Ollama', slug: 'deployments/connecting-to-local-llm-with-ollama' },
+									{ label: 'Air-gapped deployments', slug: 'deployments/air-gapped' }
+								]
+							},
+						],
+					}, {
+						label: 'Developer API',
+						link: 'developer-api',
+						id: 'developer_api',
+						icon: 'seti:json',
+						items: openAPISidebarGroups,
+					}
+				], {
+					topics: {
+						developer_api: ['/developer-api/**/*']
+					}
+				}),
+				starlightLlmsTxt({
 				projectName: "Mundi",
 				description: "Mundi is an open source, AI-native web GIS for creating maps, analyzing geospatial data, and connecting to databases like PostGIS.",
 				details: `
