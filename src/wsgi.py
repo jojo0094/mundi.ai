@@ -113,7 +113,6 @@ app.include_router(
 # mcp.mount()
 
 
-
 app.mount("/assets", StaticFiles(directory="frontendts/dist/assets"), name="spa-assets")
 
 

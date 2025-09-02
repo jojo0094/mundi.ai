@@ -252,11 +252,48 @@ class UserMapsResponse(BaseModel):
     maps: List[MapResponse]
 
 
+# mundi-public/frontendts/src/lib/types.tsx
+class LayerMetadata(BaseModel):
+    original_filename: Optional[str] = None
+    original_format: Optional[str] = None
+    converted_to: Optional[str] = None
+    original_srid: Optional[int] = None
+    feature_count: Optional[int] = None
+    geometry_type: Optional[str] = None
+    raster_value_stats_b1: Optional[dict] = None  # {min: float, max: float}
+    pointcloud_anchor: Optional[dict] = None  # {lon: float, lat: float}
+    pointcloud_z_range: Optional[List[float]] = None  # [min_z, max_z]
+
+
+def _filter_layer_metadata(md: Optional[dict]) -> Optional[dict]:
+    if not md or not isinstance(md, dict):
+        return None
+
+    allowed_keys = {
+        "original_filename",
+        "original_format",
+        "converted_to",
+        "original_srid",
+        "feature_count",
+        "geometry_type",
+        "raster_value_stats_b1",
+        "pointcloud_anchor",
+        "pointcloud_z_range",
+    }
+
+    out: dict = {}
+    for k in allowed_keys:
+        if k in md:
+            out[k] = md[k]
+
+    return LayerMetadata(**out).model_dump(exclude_none=True)
+
+
 class LayerResponse(BaseModel):
     id: str
     name: str
     type: str
-    metadata: Optional[dict] = None
+    metadata: Optional[LayerMetadata] = None
     bounds: Optional[List[float]] = (
         None  # [xmin, ymin, xmax, ymax] in WGS84 coordinates
     )
@@ -505,6 +542,7 @@ async def get_map_route(
         for layer in layers:
             if layer.get("metadata") and isinstance(layer["metadata"], str):
                 layer["metadata"] = json.loads(layer["metadata"])
+            layer["metadata"] = _filter_layer_metadata(layer.get("metadata"))
 
         # Calculate diff if prev_map_id is provided
         layer_diffs = None
@@ -663,6 +701,7 @@ async def get_map_layers(
                 # Convert metadata from JSON string to Python dict if needed
                 if isinstance(layer["metadata"], str):
                     layer["metadata"] = json.loads(layer["metadata"])
+            layer["metadata"] = _filter_layer_metadata(layer.get("metadata"))
 
             # Set feature_count from metadata if it exists
             if (

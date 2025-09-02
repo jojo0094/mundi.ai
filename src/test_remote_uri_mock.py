@@ -576,9 +576,7 @@ async def test_cloud_native_tiff_redirect(auth_client):
 
         metadata = json.loads(metadata)
 
-    assert metadata.get("original_url") == tiff_url
     assert metadata.get("original_filename") == "cogtif.tif"
-    assert metadata.get("source") == "remote"
 
     bounds = tiff_layer.get("bounds")
     assert len(bounds) == 4

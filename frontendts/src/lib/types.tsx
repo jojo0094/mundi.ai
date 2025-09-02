@@ -18,6 +18,7 @@ export interface MapProject {
 
 export type ProjectState = { type: 'not_logged_in' } | { type: 'loading' } | { type: 'loaded'; projects: MapProject[] };
 
+// Keep this in sync with backend LayerMetadata (mundi-public/src/routes/postgres_routes.py)
 export interface MapLayerMetadata {
   original_filename?: string;
   original_format?: string;
@@ -34,8 +35,6 @@ export interface MapLayerMetadata {
     lat: number;
   };
   pointcloud_z_range?: [number, number];
-  pmtiles_key?: string;
-  cog_key?: string;
 }
 
 export interface MapLayer {
