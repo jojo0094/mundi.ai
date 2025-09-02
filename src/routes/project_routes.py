@@ -104,8 +104,6 @@ class PostgresConnectionDetails(BaseModel):
 
 class ProjectResponse(BaseModel):
     id: str
-    owner_uuid: str
-    link_accessible: bool
     title: Optional[str] = None
     maps: Optional[List[str]] = None
     created_on: str
@@ -164,7 +162,7 @@ async def list_user_projects(
 
         projects_data = await conn.fetch(
             """
-            SELECT p.id, p.owner_uuid, p.link_accessible, p.title, p.maps, p.created_on, p.soft_deleted_at
+            SELECT p.id, p.title, p.maps, p.created_on, p.soft_deleted_at
             FROM user_mundiai_projects p
             WHERE (
                 p.owner_uuid = $1 OR
@@ -189,7 +187,6 @@ async def list_user_projects(
                 if isinstance(project_data["created_on"], datetime)
                 else str(project_data["created_on"])
             )
-            owner_uuid_str = str(project_data["owner_uuid"])
             most_recent_map_details = None
 
             if project_data["maps"] and len(project_data["maps"]) > 0:
@@ -272,8 +269,6 @@ async def list_user_projects(
             projects_response.append(
                 ProjectResponse(
                     id=project_data["id"],
-                    owner_uuid=owner_uuid_str,
-                    link_accessible=project_data["link_accessible"],
                     title=project_data["title"],
                     maps=project_data["maps"],
                     created_on=created_on_str,
@@ -302,8 +297,6 @@ async def get_project_route(
 ):
     async with get_async_db_connection() as conn:
         created_on_str = project.created_on.isoformat()
-
-        owner_uuid_str = str(project.owner_uuid)
         most_recent_map_details = None
 
         if project.maps and len(project.maps) > 0:
@@ -385,8 +378,6 @@ async def get_project_route(
 
         return ProjectResponse(
             id=project.id,
-            owner_uuid=owner_uuid_str,
-            link_accessible=project.link_accessible,
             title=project.title,
             maps=project.maps,
             created_on=created_on_str,

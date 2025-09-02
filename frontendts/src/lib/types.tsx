@@ -4,8 +4,6 @@ import { ChatCompletionUserMessageParam } from 'openai/resources/chat/completion
 
 export interface MapProject {
   id: string;
-  owner_uuid: string;
-  link_accessible: boolean;
   title?: string;
   maps: string[];
   created_on: string;
