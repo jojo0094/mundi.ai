@@ -346,7 +346,7 @@ async def create_map(
         "title": "Brazilian catchment areas",
         "created_on": "2025-08-29T12:34:56.789Z",
         "map_link": "https://app.mundi.ai/project/PGJSkB1zj7fT",
-        "id": "Mabc123def456",
+        "id": "MWfqcRak59bo",
         "project_id": "PGJSkB1zj7fT"
     }
     ```
@@ -2682,12 +2682,35 @@ async def remove_layer_from_map(
     )
 
 
-@router.patch("/{map_id}", operation_id="update_map")
+@router.patch("/{map_id}", operation_id="update_map", summary="Update map properties")
 async def update_map(
     update_data: MapUpdateRequest,
     map: MundiMap = Depends(get_map),
 ):
-    """Update map basemap selection."""
+    """Updates an existing map's properties. Currently supports updating
+    the map's basemap style.
+
+    The basemap determines the background map tiles displayed beneath your
+    data layers. Available basemap options for Mundi cloud are from MapTiler:
+    - `hybrid` - Satellite imagery
+    - `basic-v2` - Basic street map (default)
+    - `dataviz` - Light basemap for data visualization
+    - `dataviz-dark` - Dark basemap for data visualization
+    - `outdoor-v2` - Outdoor/terrain map
+
+    ```py
+    result = httpx.patch(
+        "https://api.mundi.ai/api/maps/MWfqcRak59bo",
+        json={"basemap": "hybrid"},
+        headers={"Authorization": f"Bearer {os.environ['MUNDI_API_KEY']}"}
+    ).json()
+
+    assert result == {
+        "id": "MWfqcRak59bo",
+        "basemap": "hybrid",
+        "message": "Map updated successfully"
+    }
+    ```"""
     if update_data.basemap is None:
         return {"message": "No basemap update provided"}
 

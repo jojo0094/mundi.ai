@@ -896,6 +896,22 @@ async def update_layer(
     layer: MapLayer = Depends(get_layer),
     user_id: str = Depends(session_user_id),
 ) -> LayerUpdateResponse:
+    """Updates properties of an existing layer. Currently supports updating
+    the layer's display name.
+
+    ```py
+    result = httpx.patch(
+        "https://api.mundi.ai/api/layer/L4b2c3d4e5f6",
+        json={"name": "New name in layer list"},
+        headers={"Authorization": f"Bearer {os.environ['MUNDI_API_KEY']}"}
+    ).json()
+
+    assert result == {
+        "layer_id": "L4b2c3d4e5f6",
+        "name": "New name in layer list",
+        "message": "Layer updated successfully"
+    }
+    ```"""
     if user_id != str(layer.owner_uuid):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

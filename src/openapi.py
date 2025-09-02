@@ -122,6 +122,8 @@ def custom_openapi():
         "set_layer_style",
         "render_map_to_png",
         "delete_project",
+        "update_layer",
+        "update_map",
     }
     selected_routes = [
         r
