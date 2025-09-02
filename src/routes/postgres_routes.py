@@ -2682,7 +2682,7 @@ async def remove_layer_from_map(
     )
 
 
-@router.patch("/{map_id}", operation_id="update_map", summary="Update map properties")
+@router.patch("/{map_id}", operation_id="update_map", summary="Update map")
 async def update_map(
     update_data: MapUpdateRequest,
     map: MundiMap = Depends(get_map),

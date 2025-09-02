@@ -888,7 +888,7 @@ class LayerUpdateResponse(BaseModel):
 @layer_router.patch(
     "/layer/{layer_id}",
     operation_id="update_layer",
-    summary="Update layer properties",
+    summary="Update layer",
     response_model=LayerUpdateResponse,
 )
 async def update_layer(
