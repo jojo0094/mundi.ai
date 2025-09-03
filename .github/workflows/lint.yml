@@ -46,5 +46,8 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v3
 
-      - name: Run basedpyright
-        run: uvx basedpyright
+      - name: Install deps with uv
+        run: uv sync --dev
+
+      - name: Run basedpyright from project env
+        run: uv run basedpyright
