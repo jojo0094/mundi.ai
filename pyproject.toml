@@ -38,3 +38,8 @@ baselineFile = ".basedpyright/baseline.json"
 
 # can tighten later to "recommended"
 typeCheckingMode = "standard"
+
+[dependency-groups]
+dev = [
+    "basedpyright",
+]
