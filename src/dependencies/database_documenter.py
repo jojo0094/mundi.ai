@@ -18,8 +18,8 @@ from functools import lru_cache
 from typing import Tuple
 import secrets
 from src.structures import get_async_db_connection
-from .postgres_connection import PostgresConnectionManager
-from .chat_completions import ChatArgsProvider
+from src.dependencies.postgres_connection import PostgresConnectionManager
+from src.dependencies.chat_completions import ChatArgsProvider
 from redis import Redis
 from openai import AsyncOpenAI
 import os

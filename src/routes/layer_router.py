@@ -25,11 +25,11 @@ from fastapi import (
     Depends,
 )
 from fastapi.responses import StreamingResponse, Response, RedirectResponse
-from ..dependencies.db_pool import get_pooled_connection
-from ..dependencies.dag import get_layer
+from src.dependencies.db_pool import get_pooled_connection
+from src.dependencies.dag import get_layer
 from pydantic import BaseModel, Field
 from src.database.models import MapLayer
-from ..dependencies.session import (
+from src.dependencies.session import (
     verify_session_required,
     session_user_id,
     UserContext,
@@ -47,7 +47,7 @@ from src.utils import (
 import subprocess
 from src.structures import get_async_db_connection, async_conn
 from src.postgis_tiles import fetch_mvt_tile
-from ..dependencies.layer_describer import LayerDescriber, get_layer_describer
+from src.dependencies.layer_describer import LayerDescriber, get_layer_describer
 from opentelemetry import trace
 from src.dependencies.base_map import get_base_map_provider
 from src.utils import generate_id

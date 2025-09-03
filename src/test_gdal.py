@@ -16,7 +16,7 @@
 import subprocess
 import pytest
 from pathlib import Path
-from .test_mbgl_renderer import compare_images
+from src.test_mbgl_renderer import compare_images
 
 # Reference images directory
 REFERENCE_DIR = Path(__file__).parent.parent / "test_fixtures" / "reference_images"

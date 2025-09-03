@@ -37,7 +37,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from src.dependencies.dag import forked_map_by_user, get_map, get_layer
 from src.database.models import MundiMap, MapLayer
-from ..dependencies.session import (
+from src.dependencies.session import (
     verify_session_required,
     verify_session_optional,
     UserContext,
@@ -66,11 +66,11 @@ import ipaddress
 import socket
 from src.symbology.llm import generate_maplibre_layers_for_layer_id
 from src.routes.layer_router import describe_layer_internal
-from ..structures import get_async_db_connection, async_conn
-from ..dependencies.base_map import BaseMapProvider, get_base_map_provider
-from ..dependencies.postgis import get_postgis_provider
-from ..dependencies.layer_describer import LayerDescriber, get_layer_describer
-from ..dependencies.postgres_connection import (
+from src.structures import get_async_db_connection, async_conn
+from src.dependencies.base_map import BaseMapProvider, get_base_map_provider
+from src.dependencies.postgis import get_postgis_provider
+from src.dependencies.layer_describer import LayerDescriber, get_layer_describer
+from src.dependencies.postgres_connection import (
     PostgresConnectionManager,
     get_postgres_connection_manager,
 )
