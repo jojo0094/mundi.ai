@@ -37,8 +37,10 @@ from openai.types.chat.chat_completion_message import ChatCompletionMessage
 from openai.types.chat.chat_completion_tool_message_param import (
     ChatCompletionToolMessageParam,
 )
-from openai.types.chat.chat_completion_message_param import (
+from openai.types.chat.chat_completion_user_message_param import (
     ChatCompletionUserMessageParam,
+)
+from openai.types.chat.chat_completion_system_message_param import (
     ChatCompletionSystemMessageParam,
 )
 from openai.types.chat.chat_completion_message_param import (

@@ -38,7 +38,7 @@ from datetime import datetime
 from PIL import Image
 from redis import Redis
 import asyncio
-import botocore
+from botocore.exceptions import ClientError
 
 from src.utils import (
     get_bucket_name,
@@ -715,7 +715,7 @@ async def get_project_social_preview(
         s3_response = await s3.get_object(Bucket=bucket_name, Key=s3_key)
         image_data = await s3_response["Body"].read()
 
-    except botocore.exceptions.ClientError:
+    except ClientError:
         # Re-render with semaphore to limit concurrent renders
         async with SOCIAL_RENDER_SEMAPHORE:
             print(
