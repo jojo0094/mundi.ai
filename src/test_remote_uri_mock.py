@@ -523,6 +523,8 @@ async def test_cloud_native_pmtiles_redirect(auth_client):
         (layer for layer in resp["layers"] if layer["id"] == layer_id), None
     )
 
+    # Ensure layer was found for type narrowing
+    assert pmtiles_layer is not None
     bounds = pmtiles_layer["bounds"]
     assert len(bounds) == 4
     minx, miny, maxx, maxy = bounds
@@ -567,6 +569,8 @@ async def test_cloud_native_tiff_redirect(auth_client):
     tiff_layer = next(
         (layer for layer in resp["layers"] if layer["id"] == layer_id), None
     )
+    # Ensure layer was found for type narrowing
+    assert tiff_layer is not None
     assert "Test Cloud-Native TIFF Layer" in [layer["name"] for layer in resp["layers"]]
     assert layer_id in [layer["id"] for layer in resp["layers"]]
 

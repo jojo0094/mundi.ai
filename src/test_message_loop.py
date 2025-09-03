@@ -393,7 +393,12 @@ async def test_map_locking_prevents_concurrent_requests(auth_client):
 
     response1, response2 = await asyncio.gather(*tasks, return_exceptions=True)
 
-    responses = [response1, response2]
+    # Narrow types by asserting no exceptions were returned
+    maybe_responses = [response1, response2]
+    exceptions = [e for e in maybe_responses if isinstance(e, BaseException)]
+    assert not exceptions, f"Requests raised exceptions: {exceptions}"
+
+    responses = [r for r in maybe_responses if not isinstance(r, BaseException)]
     status_codes = [r.status_code for r in responses]
 
     assert 200 in status_codes, "At least one request should succeed"
