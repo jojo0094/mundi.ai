@@ -68,27 +68,9 @@ export interface MapData {
     map_state: string;
     last_edited: string;
   }>;
-  display_as_diff: boolean;
-  diff?: MapDiff;
 }
 
-export interface LayerDiff {
-  layer_id: string;
-  name: string;
-  status: string; // 'added', 'removed', 'edited', 'existing'
-  changes?: {
-    [key: string]: {
-      old: string | object | null;
-      new: string | object | null;
-    };
-  };
-}
-
-export interface MapDiff {
-  prev_map_id?: string;
-  new_map_id: string;
-  layer_diffs: LayerDiff[];
-}
+// Note: Per-layer diffs for the map detail route have been removed.
 
 export interface PointerPosition {
   lng: number;

@@ -81,9 +81,7 @@ class MundiMap(Base):
         String(12), ForeignKey("user_mundiai_maps.id"), nullable=True
     )
     layers = Column(ARRAY(String(12)))
-    display_as_diff = Column(
-        Boolean, default=True
-    )  # if true, diff from previous. false locks in changes
+    display_as_diff = Column(Boolean, nullable=True)  # deprecated
     title = Column(String)
     description = Column(String)
     created_on = Column(

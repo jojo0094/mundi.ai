@@ -413,8 +413,8 @@ async def create_map(
         result = await conn.fetchrow(
             """
             INSERT INTO user_mundiai_maps
-            (id, project_id, owner_uuid, title, display_as_diff)
-            VALUES ($1, $2, $3, $4, TRUE)
+            (id, project_id, owner_uuid, title)
+            VALUES ($1, $2, $3, $4)
             RETURNING id, title, created_on
             """,
             map_id,
@@ -447,7 +447,6 @@ async def create_map(
 )
 async def get_map_route(
     request: Request,
-    diff_map_id: Optional[str] = None,
     map: MundiMap = Depends(get_map),
     session: UserContext = Depends(verify_session_optional),
 ):
@@ -473,19 +472,6 @@ async def get_map_route(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Project not found",
             )
-        # Handle diff_map_id logic
-        prev_map_id = None
-        if diff_map_id == "auto":
-            # Find the previous map in the project
-            proj_maps = project["maps"] or []
-            try:
-                current_index = proj_maps.index(map.id)
-                if current_index > 0:
-                    prev_map_id = proj_maps[current_index - 1]
-            except ValueError:
-                pass  # map_id not found in project maps
-        elif diff_map_id:
-            prev_map_id = diff_map_id
 
         # Get last_edited times for maps in the project
         map_ids = project["maps"] or []
@@ -544,131 +530,13 @@ async def get_map_route(
                 layer["metadata"] = json.loads(layer["metadata"])
             layer["metadata"] = _filter_layer_metadata(layer.get("metadata"))
 
-        # Calculate diff if prev_map_id is provided
-        layer_diffs = None
-        if prev_map_id:
-            user_id = session.get_user_id() if session else str(map.owner_uuid)
-
-            # Get previous map layers with their style IDs
-            prev_layer_rows = await conn.fetch(
-                """
-                SELECT ml.layer_id, ml.name, ml.type, ml.metadata, ml.geometry_type, ml.feature_count,
-                       mls.style_id
-                FROM user_mundiai_maps m
-                JOIN map_layers ml ON ml.layer_id = ANY(m.layers)
-                LEFT JOIN map_layer_styles mls ON mls.map_id = m.id AND mls.layer_id = ml.layer_id
-                WHERE m.id = $1 AND m.owner_uuid = $2 AND m.soft_deleted_at IS NULL
-                """,
-                prev_map_id,
-                user_id,
-            )
-            prev_layers = {row["layer_id"]: row for row in prev_layer_rows}
-
-            # Get current map layers with their style IDs
-            current_layer_rows = await conn.fetch(
-                """
-                SELECT ml.layer_id, ml.name, ml.type, ml.metadata, ml.geometry_type, ml.feature_count,
-                       mls.style_id
-                FROM user_mundiai_maps m
-                JOIN map_layers ml ON ml.layer_id = ANY(m.layers)
-                LEFT JOIN map_layer_styles mls ON mls.map_id = m.id AND mls.layer_id = ml.layer_id
-                WHERE m.id = $1 AND m.owner_uuid = $2 AND m.soft_deleted_at IS NULL
-                """,
-                map.id,
-                user_id,
-            )
-            new_layers = {row["layer_id"]: row for row in current_layer_rows}
-
-            # Calculate diffs
-            layer_diffs = []
-            all_layer_ids = set(new_layers.keys()) | set(prev_layers.keys())
-
-            for layer_id in all_layer_ids:
-                new_layer = new_layers.get(layer_id)
-                prev_layer = prev_layers.get(layer_id)
-
-                if new_layer and not prev_layer:
-                    # Added layer
-                    layer_diffs.append(
-                        {
-                            "layer_id": layer_id,
-                            "name": new_layer["name"],
-                            "status": "added",
-                        }
-                    )
-                elif prev_layer and not new_layer:
-                    # Removed layer
-                    layer_diffs.append(
-                        {
-                            "layer_id": layer_id,
-                            "name": prev_layer["name"],
-                            "status": "removed",
-                        }
-                    )
-                elif new_layer and prev_layer:
-                    # Check for changes
-                    changes = {}
-                    if new_layer["name"] != prev_layer["name"]:
-                        changes["name"] = {
-                            "old": prev_layer["name"],
-                            "new": new_layer["name"],
-                        }
-                    if new_layer["metadata"] != prev_layer["metadata"]:
-                        changes["metadata"] = {
-                            "old": prev_layer["metadata"],
-                            "new": new_layer["metadata"],
-                        }
-                    if new_layer["style_id"] != prev_layer["style_id"]:
-                        changes["style_id"] = {
-                            "old": prev_layer["style_id"],
-                            "new": new_layer["style_id"],
-                        }
-
-                    if changes:
-                        layer_diffs.append(
-                            {
-                                "layer_id": layer_id,
-                                "name": new_layer["name"],
-                                "status": "edited",
-                                "changes": changes,
-                            }
-                        )
-                    else:
-                        layer_diffs.append(
-                            {
-                                "layer_id": layer_id,
-                                "name": new_layer["name"],
-                                "status": "existing",
-                            }
-                        )
-        elif diff_map_id == "auto" and proj_maps and map.id == proj_maps[0]:
-            # If this is the first map in the project and auto diff is requested,
-            # mark all layers as added
-            layer_diffs = []
-            for layer in layers:
-                layer_diffs.append(
-                    {
-                        "layer_id": layer["id"],
-                        "name": layer["name"],
-                        "status": "added",
-                    }
-                )
-
         # Return JSON payload
         response = {
             "map_id": map.id,
             "project_id": map.project_id,
             "layers": layers,
             "changelog": changelog,
-            "display_as_diff": map.display_as_diff,
         }
-
-        if layer_diffs is not None:
-            response["diff"] = {
-                "prev_map_id": prev_map_id,
-                "new_map_id": map.id,
-                "layer_diffs": layer_diffs,
-            }
 
         return response
 

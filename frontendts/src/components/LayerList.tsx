@@ -46,10 +46,6 @@ interface UploadingFile {
   error?: string;
 }
 
-interface LayerWithStatus extends MapLayer {
-  status: 'added' | 'removed' | 'edited' | 'existing';
-}
-
 interface LayerListProps {
   project: MapProject;
   currentMapData: MapData;
@@ -252,31 +248,6 @@ const LayerList: React.FC<LayerListProps> = ({
     postgisConnectionMutation.mutate(connectionUri);
   };
 
-  const processedLayers = useMemo<LayerWithStatus[]>(() => {
-    const currentLayersArray = currentMapData.layers || [];
-
-    // Use diff from currentMapData to determine layer statuses
-    if (currentMapData.diff && currentMapData.diff.layer_diffs) {
-      const layerDiffMap = new globalThis.Map<string, string>(currentMapData.diff.layer_diffs.map((diff) => [diff.layer_id, diff.status]));
-
-      // Start with current layers and filter out removed ones
-      const layersWithStatus = currentLayersArray
-        .map((layer) => ({
-          ...layer,
-          status: (layerDiffMap.get(layer.id) || 'existing') as 'added' | 'removed' | 'edited' | 'existing',
-        }))
-        .filter((layer) => layer.status !== 'removed');
-
-      return layersWithStatus;
-    }
-
-    // If no diff, all layers are existing
-    return currentLayersArray.map((l) => ({
-      ...l,
-      status: 'existing' as const,
-    }));
-  }, [currentMapData]);
-
   return (
     <Card className="absolute top-4 left-4 max-h-[60vh] overflow-auto py-2 rounded-sm border-0 gap-2 max-w-72 w-full">
       <CardHeader className="px-2">
@@ -333,11 +304,9 @@ const LayerList: React.FC<LayerListProps> = ({
         </CardTitle>
       </CardHeader>
       <CardContent className="px-0">
-        {processedLayers.length > 0 ? (
+        {(currentMapData.layers?.length ?? 0) > 0 ? (
           <ul className="text-sm">
-            {processedLayers.map((layerWithStatus: LayerWithStatus) => {
-              const { status, ...layerDetails } = layerWithStatus;
-
+            {(currentMapData.layers ?? []).map((layerDetails: MapLayer) => {
               // Check if this layer has an active action
               const hasActiveAction = activeActions.some((action) => action.layer_id === layerDetails.id);
               const num_highlighted = 0;
@@ -375,12 +344,10 @@ const LayerList: React.FC<LayerListProps> = ({
                   <LayerListItem
                     name={layerDetails.name}
                     nameClassName={getNameClassName()}
-                    status={status}
                     isActive={hasActiveAction}
                     hoverText={hoverText}
                     normalText={normalText}
                     legendSymbol={<LayerLegendSymbol layerDetails={layerDetails} />}
-                    displayAsDiff={currentMapData.display_as_diff}
                     layerId={layerDetails.id}
                     isVisible={!hiddenLayerIDs.includes(layerDetails.id)}
                     title={errorTitle}
@@ -393,7 +360,7 @@ const LayerList: React.FC<LayerListProps> = ({
                     dropdownActions={{
                       'zoom-to-layer': {
                         label: 'Zoom to layer',
-                        disabled: status === 'removed',
+                        disabled: false,
                         action: (layerId) => {
                           const layer = currentMapData.layers?.find((l) => l.id === layerId);
                           if (!layer) {
@@ -416,7 +383,7 @@ const LayerList: React.FC<LayerListProps> = ({
                       },
                       'view-attributes': {
                         label: 'View attributes',
-                        disabled: status === 'removed',
+                        disabled: false,
                         action: (layerId) => {
                           const layer = currentMapData.layers?.find((l) => l.id === layerId);
                           if (!layer) {
@@ -429,18 +396,14 @@ const LayerList: React.FC<LayerListProps> = ({
                       },
                       'export-geopackage': {
                         label: 'Export as GeoPackage',
-                        disabled: status === 'removed' || layerWithStatus.type != 'vector',
+                        disabled: layerDetails.type !== 'vector',
                         action: () => {
                           // TODO: Implement geopackage export
                         },
                       },
                       'delete-layer': {
-                        label: status === 'removed' ? 'Layer marked as removed' : 'Delete layer',
+                        label: 'Delete layer',
                         action: (layerId) => {
-                          if (status === 'removed') {
-                            toast.info('Layer is already removed.');
-                            return;
-                          }
                           fetch(`/api/maps/${currentMapData.map_id}/layer/${layerId}`, {
                             method: 'DELETE',
                             headers: { 'Content-Type': 'application/json' },

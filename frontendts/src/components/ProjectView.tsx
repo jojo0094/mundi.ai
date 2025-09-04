@@ -77,7 +77,7 @@ export default function ProjectView() {
 
   const { error, data: mapData } = useQuery({
     queryKey: ['project', projectId, 'map', versionId],
-    queryFn: () => fetch(`/api/maps/${versionId}?diff_map_id=auto`).then((res) => res.json()),
+    queryFn: () => fetch(`/api/maps/${versionId}`).then((res) => res.json()),
     // prevent map (query parameter) refreshing this
     refetchOnMount: false,
     enabled: !!versionId,

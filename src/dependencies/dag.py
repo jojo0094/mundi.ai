@@ -57,8 +57,8 @@ async def forked_map(
         row = await conn.fetchrow(
             """
             INSERT INTO user_mundiai_maps
-            (id, project_id, owner_uuid, parent_map_id, title, description, layers, display_as_diff, fork_reason, basemap)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, $8, $9)
+            (id, project_id, owner_uuid, parent_map_id, title, description, layers, fork_reason, basemap)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING *
             """,
             new_map_id,
