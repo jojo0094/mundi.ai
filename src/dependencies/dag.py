@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from fastapi import Path, Depends, HTTPException
+import os
 
 from src.database.models import MundiMap, MundiProject, MapLayer
 from src.structures import async_conn
@@ -177,3 +178,25 @@ async def get_project(
             raise HTTPException(404, f"Project {project_id} not found")
 
         return MundiProject(**dict(project_row))
+
+
+# MUNDI_AUTH_MODE guards whether or not mundi data is editable
+# https://docs.mundi.ai/deployments/self-hosting-mundi/
+async def edit_project(project: MundiProject = Depends(get_project)) -> MundiProject:
+    mode = (os.environ.get("MUNDI_AUTH_MODE") or "edit").lower()
+    if mode != "edit":
+        raise HTTPException(
+            status_code=403,
+            detail="Editing disabled when MUNDI_AUTH_MODE not set to edit",
+        )
+    return project
+
+
+async def edit_map(map: MundiMap = Depends(get_map)) -> MundiMap:
+    mode = (os.environ.get("MUNDI_AUTH_MODE") or "edit").lower()
+    if mode != "edit":
+        raise HTTPException(
+            status_code=403,
+            detail="Editing disabled when MUNDI_AUTH_MODE not set to edit",
+        )
+    return map

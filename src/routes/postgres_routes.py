@@ -35,7 +35,7 @@ from fastapi import (
 )
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from src.dependencies.dag import forked_map_by_user, get_map, get_layer
+from src.dependencies.dag import forked_map_by_user, get_map, get_layer, edit_map
 from src.database.models import MundiMap, MapLayer
 from src.dependencies.session import (
     verify_session_required,
@@ -741,7 +741,7 @@ async def get_map_style(
     base_map: BaseMapProvider = Depends(get_base_map_provider),
 ):
     return await get_map_style_internal(
-        map.id, base_map, only_show_inline_sources, override_layers, basemap
+        str(map.id), base_map, only_show_inline_sources, override_layers, basemap
     )
 
 
@@ -2313,7 +2313,7 @@ async def process_vector_layer_common(
 
 @router.put("/{map_id}/layer/{layer_id}", operation_id="add_layer_to_map")
 async def add_layer_to_map(
-    map: MundiMap = Depends(get_map),
+    map: MundiMap = Depends(edit_map),
     layer: MapLayer = Depends(get_layer),
 ):
     if map.layers is not None and layer.id in map.layers:
@@ -2401,12 +2401,8 @@ async def render_map(
 
     Width and height are in pixels.
     """
-    style_json = await get_map_style(
-        request,
-        map.id,
-        only_show_inline_sources=True,
-        session=session,
-        base_map=base_map,
+    style_json = await get_map_style_internal(
+        str(map.id), base_map, only_show_inline_sources=True
     )
 
     return (

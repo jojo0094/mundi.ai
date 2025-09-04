@@ -520,7 +520,6 @@ async def get_layer_mvt_tile(
     y: int,
     request: Request,
     layer: MapLayer = Depends(get_layer),
-    session: UserContext = Depends(verify_session_required),
 ):
     # Validate tile coordinates
     if z < 0 or z > 18 or x < 0 or y < 0 or x >= (1 << z) or y >= (1 << z):
@@ -528,15 +527,14 @@ async def get_layer_mvt_tile(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid tile coordinates"
         )
     async with async_conn("mvt") as conn:
-        # Get PostGIS connection details and verify ownership
+        # Get PostGIS connection details (authorization handled by get_layer)
         connection_details = await conn.fetchrow(
             """
-            SELECT user_id, connection_uri
+            SELECT connection_uri
             FROM project_postgres_connections
-            WHERE id = $1 AND user_id = $2
+            WHERE id = $1 AND soft_deleted_at IS NULL
             """,
             layer.postgis_connection_id,
-            session.get_user_id(),
         )
 
         if not connection_details:

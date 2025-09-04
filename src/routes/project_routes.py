@@ -63,7 +63,7 @@ from src.dependencies.postgres_connection import (
     PostgresConnectionURIError,
     PostgresConfigurationError,
 )
-from src.dependencies.dag import get_project
+from src.dependencies.dag import get_project, edit_project
 from src.routes.postgres_routes import (
     generate_id,
     get_map_style_internal,
@@ -233,11 +233,17 @@ async def list_user_projects(
 )
 async def list_project_sources(
     project: MundiProject = Depends(get_project),
+    session: UserContext = Depends(verify_session_required),
     connection_manager: PostgresConnectionManager = Depends(
         get_postgres_connection_manager
     ),
 ):
-    """List the project's PostGIS database sources (connections)."""
+    user_id = session.get_user_id()
+    if str(project.owner_uuid) != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the project owner can view sources",
+        )
     async with get_async_db_connection() as conn:
         postgres_connections: List[PostgresConnectionDetails] = []
 
@@ -303,7 +309,6 @@ async def list_project_sources(
 )
 async def get_project_route(
     project: MundiProject = Depends(get_project),
-    session: UserContext = Depends(verify_session_required),
 ):
     async with get_async_db_connection() as conn:
         created_on_str = project.created_on.isoformat()
@@ -354,7 +359,7 @@ class ProjectUpdateResponse(BaseModel):
 )
 async def update_project(
     update_data: ProjectUpdateRequest,
-    project: MundiProject = Depends(get_project),
+    project: MundiProject = Depends(edit_project),
 ):
     async with get_async_db_connection() as conn:
         updated = False
@@ -712,7 +717,7 @@ async def get_project_social_preview(
     description="Marks a map project as deleted (uses soft delete).",
 )
 async def delete_project(
-    project: MundiProject = Depends(get_project),
+    project: MundiProject = Depends(edit_project),
 ):
     """
     Soft deletes a map project. This project will no longer be listed in the user's
