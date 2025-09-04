@@ -177,6 +177,7 @@ interface MapLibreMapProps {
   mapTree: MapTreeResponse | null;
   conversationId: number | null;
   conversations: Conversation[];
+  conversationsEnabled: boolean;
   setConversationId: (conversationId: number | null) => void;
   readyState: number;
   openDropzone?: () => void;
@@ -206,6 +207,7 @@ export default function MapLibreMap({
   mapTree,
   conversationId,
   conversations,
+  conversationsEnabled,
   setConversationId,
   readyState,
   openDropzone,
@@ -1271,6 +1273,7 @@ export default function MapLibreMap({
         conversationId={conversationId}
         currentMapId={mapId}
         conversations={conversations}
+        conversationsEnabled={conversationsEnabled}
         setConversationId={setConversationId}
         activeActions={activeActions}
       />

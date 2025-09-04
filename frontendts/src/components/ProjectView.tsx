@@ -58,6 +58,8 @@ export default function ProjectView() {
       if (!res.ok) throw new Error('Failed to fetch project sources');
       return (await res.json()) as PostgresConnectionDetails[];
     },
+    retry: 5,
+    retryDelay: (attempt) => 1000 * attempt,
   });
 
   useEffect(() => {
@@ -66,10 +68,18 @@ export default function ProjectView() {
   }, [projectSources]);
 
   const [conversationId, setConversationId] = usePersistedState<number | null>('conversationId', [projectId], null);
-  const { data: conversations } = useQuery({
+  const { data: conversations, isError: conversationsError } = useQuery({
     queryKey: ['project', projectId, 'conversations'],
-    queryFn: () => fetch(`/api/conversations?project_id=${projectId}`).then((res) => res.json() as Promise<Conversation[]>),
+    queryFn: async () => {
+      const res = await fetch(`/api/conversations?project_id=${projectId}`);
+      if (!res.ok) throw new Error('Failed to fetch conversations');
+      return (await res.json()) as Conversation[];
+    },
+    retry: 5,
+    retryDelay: (attempt) => 1000 * attempt,
   });
+  const conversationsEnabled = !conversationsError;
+  const effectiveConversationId = conversationsEnabled ? conversationId : null;
 
   const versionId = versionIdParam || (project?.maps && project.maps.length > 0 ? project.maps[project.maps.length - 1] : null);
 
@@ -92,12 +102,15 @@ export default function ProjectView() {
   });
 
   const { data: mapTree } = useQuery({
-    queryKey: ['project', projectId, 'map', versionId, 'tree', conversationId],
-    queryFn: () =>
-      fetch(`/api/maps/${versionId}/tree${conversationId ? `?conversation_id=${conversationId}` : ''}`).then(
-        (res) => res.json() as Promise<MapTreeResponse>,
-      ),
+    queryKey: ['project', projectId, 'map', versionId, 'tree', effectiveConversationId],
+    queryFn: async () => {
+      const res = await fetch(`/api/maps/${versionId}/tree${effectiveConversationId ? `?conversation_id=${effectiveConversationId}` : ''}`);
+      if (!res.ok) throw new Error('Failed to fetch map tree');
+      return (await res.json()) as MapTreeResponse;
+    },
     enabled: !!versionId,
+    retry: 5,
+    retryDelay: (attempt) => 1000 * attempt,
     placeholderData: (previousData) => {
       if (!previousData) return undefined;
       // mapTree being null/undefined makes the version visualization flicker, so
@@ -491,8 +504,9 @@ export default function ProjectView() {
         project={project}
         mapData={mapData}
         mapTree={mapTree || null}
-        conversationId={conversationId}
+        conversationId={effectiveConversationId}
         conversations={conversations || []}
+        conversationsEnabled={conversationsEnabled}
         setConversationId={setConversationId}
         readyState={readyState}
         openDropzone={open}

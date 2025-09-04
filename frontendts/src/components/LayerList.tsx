@@ -126,11 +126,11 @@ const LayerList: React.FC<LayerListProps> = ({
     queryKey: ['project', project.id, 'sources'],
     queryFn: async () => {
       const response = await fetch(`/api/projects/${project.id}/sources`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch sources: ${response.status} ${response.statusText}`);
-      }
+      if (!response.ok) throw new Error('Failed to fetch project sources');
       return (await response.json()) as PostgresConnectionDetails[];
     },
+    retry: 5,
+    retryDelay: (attempt) => 1000 * attempt,
   });
 
   const postgisConnectionMutation = useMutation({
