@@ -12,7 +12,6 @@ export interface MapProject {
     description?: string;
     last_edited?: string;
   };
-  postgres_connections?: PostgresConnectionDetails[];
   soft_deleted_at?: string;
 }
 

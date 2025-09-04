@@ -12,7 +12,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Map as MLMap } from 'maplibre-gl';
 import { toast } from 'sonner';
 import type { ErrorEntry, UploadingFile } from '../lib/frontend-types';
-import type { Conversation, EphemeralAction, MapProject, MapTreeResponse } from '../lib/types';
+import type { Conversation, EphemeralAction, MapProject, MapTreeResponse, PostgresConnectionDetails } from '../lib/types';
 import { usePersistedState } from '../lib/usePersistedState';
 
 const DROPZONE_ACCEPT: Accept = {
@@ -50,12 +50,20 @@ export default function ProjectView() {
     refetchInterval: projectRefetchInterval,
   });
 
-  // Update refetch interval based on loading PostGIS connections
-  useEffect(() => {
-    const hasLoadingConnections = project?.postgres_connections?.some((connection) => !connection.is_documented);
+  // Fetch project PostGIS sources and update refetch interval while documenting
+  const { data: projectSources } = useQuery({
+    queryKey: ['project', projectId, 'sources'],
+    queryFn: async () => {
+      const res = await fetch(`/api/projects/${projectId}/sources`);
+      if (!res.ok) throw new Error('Failed to fetch project sources');
+      return (await res.json()) as PostgresConnectionDetails[];
+    },
+  });
 
+  useEffect(() => {
+    const hasLoadingConnections = (projectSources || []).some((c) => !c.is_documented);
     setProjectRefetchInterval(hasLoadingConnections ? 4000 : false);
-  }, [project?.postgres_connections]);
+  }, [projectSources]);
 
   const [conversationId, setConversationId] = usePersistedState<number | null>('conversationId', [projectId], null);
   const { data: conversations } = useQuery({

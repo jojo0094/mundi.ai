@@ -32,7 +32,7 @@ from src.dependencies.session import (
 )
 from src.dependencies.auth import require_auth
 from src.dependencies.base_map import BaseMapProvider, get_base_map_provider
-from typing import List, Optional
+from typing import List, Optional, Sequence, cast
 import logging
 from datetime import datetime
 from PIL import Image
@@ -108,7 +108,6 @@ class ProjectResponse(BaseModel):
     maps: Optional[List[str]] = None
     created_on: str
     most_recent_version: Optional[MostRecentVersion] = None
-    postgres_connections: List[PostgresConnectionDetails] = []
     soft_deleted_at: Optional[datetime] = None
 
 
@@ -123,9 +122,6 @@ class UserProjectsResponse(BaseModel):
 )
 async def list_user_projects(
     session: UserContext = Depends(verify_session_required),
-    connection_manager: PostgresConnectionManager = Depends(
-        get_postgres_connection_manager
-    ),
     page: int = 1,
     limit: int = 12,
     include_deleted: bool = False,
@@ -212,60 +208,6 @@ async def list_user_projects(
                         last_edited=last_edited_str,
                     )
 
-            # Get PostgreSQL connections for this project
-            postgres_connections = []
-            postgres_conn_results = await conn.fetch(
-                """
-                SELECT id, connection_uri, connection_name
-                FROM project_postgres_connections
-                WHERE project_id = $1 AND soft_deleted_at IS NULL
-                ORDER BY created_at ASC
-                """,
-                project_data["id"],
-            )
-
-            for postgres_conn_result in postgres_conn_results:
-                connection_id = postgres_conn_result["id"]
-
-                # Get AI-generated friendly name and table_count, fallback to connection_name if not available
-                summary_result = await conn.fetchrow(
-                    """
-                    SELECT friendly_name, table_count
-                    FROM project_postgres_summary
-                    WHERE connection_id = $1
-                    ORDER BY generated_at DESC
-                    LIMIT 1
-                """,
-                    connection_id,
-                )
-
-                friendly_name = (
-                    summary_result["friendly_name"]
-                    if summary_result and summary_result["friendly_name"]
-                    else postgres_conn_result["connection_name"] or "Loading..."
-                )
-                table_count = (
-                    summary_result["table_count"]
-                    if summary_result and summary_result["table_count"] is not None
-                    else 0
-                )
-
-                # Get error details from the database (they were stored during the connection attempt)
-                connection_details = await connection_manager.get_connection(
-                    connection_id
-                )
-
-                postgres_connections.append(
-                    PostgresConnectionDetails(
-                        connection_id=connection_id,
-                        table_count=table_count,
-                        friendly_name=friendly_name,
-                        is_documented=summary_result is not None,
-                        last_error_text=connection_details["last_error_text"],
-                        last_error_timestamp=connection_details["last_error_timestamp"],
-                    )
-                )
-
             projects_response.append(
                 ProjectResponse(
                     id=project_data["id"],
@@ -273,7 +215,6 @@ async def list_user_projects(
                     maps=project_data["maps"],
                     created_on=created_on_str,
                     most_recent_version=most_recent_map_details,
-                    postgres_connections=postgres_connections,
                     soft_deleted_at=project_data["soft_deleted_at"],
                 )
             )
@@ -286,21 +227,91 @@ async def list_user_projects(
 
 
 @project_router.get(
+    "/{project_id}/sources",
+    response_model=List[PostgresConnectionDetails],
+    operation_id="list_project_sources",
+)
+async def list_project_sources(
+    project: MundiProject = Depends(get_project),
+    connection_manager: PostgresConnectionManager = Depends(
+        get_postgres_connection_manager
+    ),
+):
+    """List the project's PostGIS database sources (connections)."""
+    async with get_async_db_connection() as conn:
+        postgres_connections: List[PostgresConnectionDetails] = []
+
+        postgres_conn_results = await conn.fetch(
+            """
+            SELECT id, connection_uri, connection_name
+            FROM project_postgres_connections
+            WHERE project_id = $1 AND soft_deleted_at IS NULL
+            ORDER BY created_at ASC
+            """,
+            project.id,
+        )
+
+        for postgres_conn_result in postgres_conn_results:
+            connection_id = postgres_conn_result["id"]
+
+            # Get AI-generated friendly name and table_count
+            summary_result = await conn.fetchrow(
+                """
+                SELECT friendly_name, table_count
+                FROM project_postgres_summary
+                WHERE connection_id = $1
+                ORDER BY generated_at DESC
+                LIMIT 1
+                """,
+                connection_id,
+            )
+
+            # Prefer stored summary values; otherwise fall back to progress from Redis
+            if summary_result:
+                friendly_name: str = summary_result["friendly_name"]
+                table_count: int = summary_result["table_count"] or 0
+                processed_tables_count: Optional[int] = None
+            else:
+                friendly_name = postgres_conn_result["connection_name"] or "Loading..."
+                table_count = int(
+                    redis.get(f"dbdocumenter:{connection_id}:total_tables") or 0
+                )
+                processed_tables_count = int(
+                    redis.get(f"dbdocumenter:{connection_id}:processed_tables") or 0
+                )
+
+            # Get error details recorded for this connection attempt
+            connection_details = await connection_manager.get_connection(connection_id)
+
+            postgres_connections.append(
+                PostgresConnectionDetails(
+                    connection_id=connection_id,
+                    table_count=table_count,
+                    processed_tables_count=processed_tables_count,
+                    friendly_name=friendly_name,
+                    is_documented=summary_result is not None,
+                    last_error_text=connection_details["last_error_text"],
+                    last_error_timestamp=connection_details["last_error_timestamp"],
+                )
+            )
+
+        return postgres_connections
+
+
+@project_router.get(
     "/{project_id}", response_model=ProjectResponse, operation_id="get_project"
 )
 async def get_project_route(
     project: MundiProject = Depends(get_project),
     session: UserContext = Depends(verify_session_required),
-    connection_manager: PostgresConnectionManager = Depends(
-        get_postgres_connection_manager
-    ),
 ):
     async with get_async_db_connection() as conn:
         created_on_str = project.created_on.isoformat()
         most_recent_map_details = None
 
-        if project.maps and len(project.maps) > 0:
-            most_recent_map_id = project.maps[-1]
+        maps_value = cast(Sequence[str] | None, project.maps)
+        if maps_value and len(maps_value) > 0:
+            most_recent_map_id = maps_value[-1]
             map_details = await conn.fetchrow(
                 """
                 SELECT title, description, last_edited
@@ -321,68 +332,12 @@ async def get_project_route(
                     last_edited=last_edited_str,
                 )
 
-        # Get PostgreSQL connections for this project
-        postgres_connections = []
-        postgres_conn_results = await conn.fetch(
-            """
-            SELECT id, connection_uri, connection_name
-            FROM project_postgres_connections
-            WHERE project_id = $1 AND soft_deleted_at IS NULL
-            ORDER BY created_at ASC
-            """,
-            project.id,
-        )
-
-        for postgres_conn_result in postgres_conn_results:
-            connection_id = postgres_conn_result["id"]
-
-            # Get AI-generated friendly name and table_count, fallback to connection_name if not available
-            summary_result = await conn.fetchrow(
-                """
-                SELECT friendly_name, table_count
-                FROM project_postgres_summary
-                WHERE connection_id = $1
-                ORDER BY generated_at DESC
-                LIMIT 1
-            """,
-                connection_id,
-            )
-
-            if summary_result:
-                friendly_name = summary_result["friendly_name"]
-                table_count = summary_result["table_count"]
-                processed_tables_count = None
-            else:
-                friendly_name = "Loading..."
-                table_count = int(
-                    redis.get(f"dbdocumenter:{connection_id}:total_tables") or 0
-                )
-                processed_tables_count = int(
-                    redis.get(f"dbdocumenter:{connection_id}:processed_tables") or 0
-                )
-
-            # Get error details from the database (they were stored during the connection attempt)
-            connection_details = await connection_manager.get_connection(connection_id)
-
-            postgres_connections.append(
-                PostgresConnectionDetails(
-                    connection_id=connection_id,
-                    table_count=table_count,
-                    processed_tables_count=processed_tables_count,
-                    is_documented=summary_result is not None,
-                    friendly_name=friendly_name,
-                    last_error_text=connection_details["last_error_text"],
-                    last_error_timestamp=connection_details["last_error_timestamp"],
-                )
-            )
-
         return ProjectResponse(
             id=project.id,
             title=project.title,
             maps=project.maps,
             created_on=created_on_str,
             most_recent_version=most_recent_map_details,
-            postgres_connections=postgres_connections,
         )
 
 

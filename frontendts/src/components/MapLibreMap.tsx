@@ -1029,7 +1029,6 @@ export default function MapLibreMap({
     }
   };
 
-
   // Add basemap control when map and basemaps are available
   useEffect(() => {
     const map = localMapRef.current;

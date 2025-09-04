@@ -1,7 +1,7 @@
 // Copyright Bunting Labs, Inc. 2025
 
 import { ShareEmbedModal } from '@mundi/ee';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
   ChevronLeft,
@@ -19,7 +19,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { Map as MLMap } from 'maplibre-gl';
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ReadyState } from 'react-use-websocket';
 import { toast } from 'sonner';
@@ -36,7 +36,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ErrorEntry } from '../lib/frontend-types';
-import type { EphemeralAction, MapData, MapLayer, MapProject } from '../lib/types';
+import type { EphemeralAction, MapData, MapLayer, MapProject, PostgresConnectionDetails } from '../lib/types';
 
 interface UploadingFile {
   id: string;
@@ -121,6 +121,18 @@ const LayerList: React.FC<LayerListProps> = ({
   const [showESRIDialog, setShowESRIDialog] = useState(false);
   const [portError, setPortError] = useState<string | null>(null);
 
+  // Fetch PostGIS sources (database connections) for this project
+  const { data: projectSources } = useQuery({
+    queryKey: ['project', project.id, 'sources'],
+    queryFn: async () => {
+      const response = await fetch(`/api/projects/${project.id}/sources`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch sources: ${response.status} ${response.statusText}`);
+      }
+      return (await response.json()) as PostgresConnectionDetails[];
+    },
+  });
+
   const postgisConnectionMutation = useMutation({
     mutationFn: async (connectionUri: string) => {
       const response = await fetch(`/api/projects/${currentMapData.project_id}/postgis-connections`, {
@@ -155,6 +167,7 @@ const LayerList: React.FC<LayerListProps> = ({
       // Invalidate the project query to refresh the data
       queryClient.invalidateQueries({ queryKey: ['project', currentMapData.project_id] });
       queryClient.invalidateQueries({ queryKey: ['project', currentMapData.project_id, 'map'] });
+      queryClient.invalidateQueries({ queryKey: ['project', currentMapData.project_id, 'sources'] });
     },
     onError: (error: Error) => {
       setPostgisError(error.message);
@@ -182,6 +195,7 @@ const LayerList: React.FC<LayerListProps> = ({
       // Invalidate the project query to refresh the data
       queryClient.invalidateQueries({ queryKey: ['project', project.id] });
       queryClient.invalidateQueries({ queryKey: ['project', project.id, 'map'] });
+      queryClient.invalidateQueries({ queryKey: ['project', project.id, 'sources'] });
     },
     onError: (error: Error) => {
       toast.error(`Failed to delete connection: ${error.message}`);
@@ -485,8 +499,8 @@ const LayerList: React.FC<LayerListProps> = ({
           </>
         )}
 
-        {/* Sources section */}
-        {project?.postgres_connections && project.postgres_connections.length > 0 && (
+        {/* Database Sources section */}
+        {projectSources && projectSources.length > 0 && (
           <>
             <div className="flex items-center px-2 py-2">
               <div className="flex-1 h-px bg-gray-300 dark:bg-gray-600"></div>
@@ -494,7 +508,7 @@ const LayerList: React.FC<LayerListProps> = ({
               <div className="flex-1 h-px bg-gray-300 dark:bg-gray-600"></div>
             </div>
             <ul className="text-sm">
-              {project.postgres_connections.map((connection, index) =>
+              {projectSources.map((connection, index) =>
                 connection.last_error_text ? (
                   <TooltipProvider key={index}>
                     <Tooltip>
