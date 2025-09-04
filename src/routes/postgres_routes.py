@@ -400,8 +400,8 @@ async def create_map(
         await conn.execute(
             """
             INSERT INTO user_mundiai_projects
-            (id, owner_uuid, link_accessible, maps, title)
-            VALUES ($1, $2, FALSE, ARRAY[$3], $4)
+            (id, owner_uuid, maps, title)
+            VALUES ($1, $2, ARRAY[$3], $4)
             """,
             project_id,
             owner_id,
@@ -734,43 +734,14 @@ async def get_map_description(
 )
 async def get_map_style(
     request: Request,
-    map_id: str,
+    map: MundiMap = Depends(get_map),
     only_show_inline_sources: bool = False,
-    session: UserContext = Depends(verify_session_optional),
     override_layers: Optional[str] = None,
     basemap: Optional[str] = None,
     base_map: BaseMapProvider = Depends(get_base_map_provider),
 ):
-    # Get vector layers for this map from the database
-    async with async_conn("get_map_style.fetch_map") as conn:
-        # First check if the map exists and is accessible
-        map_result = await conn.fetchrow(
-            """
-            SELECT m.id, p.link_accessible, m.owner_uuid, m.layers
-            FROM user_mundiai_maps m
-            JOIN user_mundiai_projects p ON m.project_id = p.id
-            WHERE m.id = $1 AND m.soft_deleted_at IS NULL
-            """,
-            map_id,
-        )
-
-    if not map_result:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Map not found"
-        )
-
-    # Check if map is publicly accessible
-    if not map_result["link_accessible"]:
-        # If not publicly accessible, verify that we have auth
-        if session is None or session.get_user_id() != str(map_result["owner_uuid"]):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
     return await get_map_style_internal(
-        map_id, base_map, only_show_inline_sources, override_layers, basemap
+        map.id, base_map, only_show_inline_sources, override_layers, basemap
     )
 
 
@@ -2664,9 +2635,8 @@ async def get_user_maps(
         # Get all maps owned by this user that are not soft-deleted
         maps_data = await conn.fetch(
             """
-            SELECT m.id, m.title, m.description, m.created_on, m.last_edited, p.link_accessible, m.project_id
+            SELECT m.id, m.title, m.description, m.created_on, m.last_edited, m.project_id
             FROM user_mundiai_maps m
-            JOIN user_mundiai_projects p ON m.project_id = p.id
             WHERE m.owner_uuid = $1 AND m.soft_deleted_at IS NULL
             ORDER BY m.last_edited DESC
             """,

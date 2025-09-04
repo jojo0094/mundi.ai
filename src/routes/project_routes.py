@@ -342,7 +342,6 @@ async def get_project_route(
 
 
 class ProjectUpdateRequest(BaseModel):
-    link_accessible: Optional[bool] = None
     title: Optional[str] = None
 
 
@@ -359,18 +358,6 @@ async def update_project(
 ):
     async with get_async_db_connection() as conn:
         updated = False
-
-        if update_data.link_accessible is not None:
-            await conn.execute(
-                """
-                UPDATE user_mundiai_projects
-                SET link_accessible = $1
-                WHERE id = $2
-                """,
-                update_data.link_accessible,
-                project.id,
-            )
-            updated = True
 
         if update_data.title is not None:
             await conn.execute(
