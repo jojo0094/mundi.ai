@@ -234,12 +234,30 @@ export default function MapLibreMap({
   const [layerSymbols, setLayerSymbols] = useState<{
     [layerId: string]: JSX.Element;
   }>({});
-  const [availableBasemaps, setAvailableBasemaps] = useState<string[]>([]);
-  const [basemapDisplayNames, setBasemapDisplayNames] = useState<Record<string, string>>({});
-  const [demoConfig, setDemoConfig] = useState<{
-    available: boolean;
-    description: string;
-  }>({ available: false, description: '' });
+  const { data: basemapsData } = useQuery({
+    queryKey: ['basemaps', 'available'],
+    queryFn: async () => {
+      const response = await fetch('/api/basemaps/available');
+      if (!response.ok) {
+        throw new Error('Failed to fetch basemaps');
+      }
+      return (await response.json()) as { styles: string[]; display_names?: Record<string, string> };
+    },
+  });
+  const availableBasemaps = basemapsData?.styles ?? [];
+  const basemapDisplayNames = basemapsData?.display_names ?? {};
+
+  const { data: demoConfigData } = useQuery({
+    queryKey: ['projects', 'config', 'demo-postgis-available'],
+    queryFn: async () => {
+      const response = await fetch('/api/projects/config/demo-postgis-available');
+      if (!response.ok) {
+        throw new Error('Failed to fetch demo config');
+      }
+      return (await response.json()) as { available: boolean; description: string };
+    },
+  });
+  const demoConfig = demoConfigData ?? { available: false, description: '' };
 
   const pointCloudLayers = useMemo(() => {
     const filtered = mapData?.layers?.filter((layer) => layer.type === 'point_cloud') ?? EMPTY_POINT_CLOUD_LAYERS;
@@ -1011,40 +1029,6 @@ export default function MapLibreMap({
     }
   };
 
-  // Fetch available basemaps on component mount
-  useEffect(() => {
-    const fetchAvailableBasemaps = async () => {
-      try {
-        const response = await fetch('/api/basemaps/available');
-        if (response.ok) {
-          const data = await response.json();
-          setAvailableBasemaps(data.styles);
-          setBasemapDisplayNames(data.display_names || {});
-        }
-      } catch (error) {
-        console.error('Error fetching available basemaps:', error);
-      }
-    };
-
-    fetchAvailableBasemaps();
-  }, []);
-
-  // Fetch demo config on component mount
-  useEffect(() => {
-    const fetchDemoConfig = async () => {
-      try {
-        const response = await fetch('/api/projects/config/demo-postgis-available');
-        if (response.ok) {
-          const data = await response.json();
-          setDemoConfig(data);
-        }
-      } catch (error) {
-        console.error('Error fetching demo config:', error);
-      }
-    };
-
-    fetchDemoConfig();
-  }, []);
 
   // Add basemap control when map and basemaps are available
   useEffect(() => {
