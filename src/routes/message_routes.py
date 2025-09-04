@@ -263,7 +263,11 @@ class MapTreeResponse(BaseModel):
     operation_id="get_map_tree",
     response_model=MapTreeResponse,
 )
-async def get_map_tree(map: MundiMap = Depends(get_map), conversation_id: int = None):
+async def get_map_tree(
+    map: MundiMap = Depends(get_map),
+    conversation_id: int | None = None,
+    session: UserContext = Depends(verify_session_required),
+):
     leaf_map_id = map.id
     project_id = map.project_id
 
@@ -336,12 +340,31 @@ async def get_map_tree(map: MundiMap = Depends(get_map), conversation_id: int = 
         # Fetch all messages from the conversation if conversation_id is provided
         db_messages = []
         if conversation_id is not None:
+            conv_ok = await conn.fetchrow(
+                """
+                SELECT 1
+                FROM conversations c
+                WHERE c.id = $1
+                  AND c.owner_uuid = $2
+                  AND c.project_id = $3
+                  AND c.soft_deleted_at IS NULL
+                """,
+                conversation_id,
+                session.get_user_id(),
+                map.project_id,
+            )
+            if not conv_ok:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Conversation not found",
+                )
+
             db_messages = await conn.fetch(
                 """
-                SELECT *
-                FROM chat_completion_messages
-                WHERE conversation_id = $1
-                ORDER BY created_at ASC
+                SELECT ccm.*
+                FROM chat_completion_messages ccm
+                WHERE ccm.conversation_id = $1
+                ORDER BY ccm.created_at ASC
                 """,
                 conversation_id,
             )
