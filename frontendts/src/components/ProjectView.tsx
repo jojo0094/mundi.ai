@@ -9,6 +9,7 @@ import MapLibreMap from './MapLibreMap';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { getJwt } from '@mundi/ee';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { fetchMaybeAuth } from '@mundi/ee';
 import { Map as MLMap } from 'maplibre-gl';
 import { toast } from 'sonner';
 import type { ErrorEntry, UploadingFile } from '../lib/frontend-types';
@@ -46,7 +47,14 @@ export default function ProjectView() {
   // handle a single store of project<->map<->conversation data
   const { data: project } = useQuery({
     queryKey: ['project', projectId],
-    queryFn: () => fetch(`/api/projects/${projectId}`).then((res) => res.json() as Promise<MapProject>),
+    queryFn: async () => {
+      const res = await fetchMaybeAuth(`/api/projects/${projectId}`);
+      if (res.status === 404) {
+        // Either not found or not shared; surface cleanly
+        throw new Error('Project not found');
+      }
+      return (await res.json()) as MapProject;
+    },
     refetchInterval: projectRefetchInterval,
   });
 
@@ -95,7 +103,13 @@ export default function ProjectView() {
 
   const { error, data: mapData } = useQuery({
     queryKey: ['project', projectId, 'map', versionId],
-    queryFn: () => fetch(`/api/maps/${versionId}`).then((res) => res.json()),
+    queryFn: async () => {
+      const res = await fetch(`/api/maps/${versionId}`);
+      if (res.status === 404) {
+        throw new Error('Map not found');
+      }
+      return await res.json();
+    },
     // prevent map (query parameter) refreshing this
     refetchOnMount: false,
     enabled: !!versionId,

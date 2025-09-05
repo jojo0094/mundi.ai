@@ -37,3 +37,12 @@ export function ApiKeys(): React.ReactNode | null {
 export async function getJwt(): Promise<string | undefined> {
   return undefined;
 }
+
+export function OptionalAuth({ children }: React.PropsWithChildren) {
+  return <>{children}</>;
+}
+
+export async function fetchMaybeAuth(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  // OSS build: no auth redirect; just use fetch
+  return fetch(input, init);
+}
