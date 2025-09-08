@@ -64,6 +64,8 @@ from osgeo import gdal
 import subprocess
 import ipaddress
 import socket
+import laspy
+import shutil
 from src.symbology.llm import generate_maplibre_layers_for_layer_id
 from src.routes.layer_router import describe_layer_internal
 from src.structures import get_async_db_connection, async_conn
@@ -90,6 +92,125 @@ redis = Redis(
     port=int(os.environ["REDIS_PORT"]),
     decode_responses=True,
 )
+
+
+async def preprocess_point_cloud(temp_file_path: str, metadata: dict):
+    with tracer.start_as_current_span("internal_upload_layer.laspy"):
+        las = laspy.read(temp_file_path)
+
+        mid_x = (las.header.mins[0] + las.header.maxs[0]) / 2
+        mid_y = (las.header.mins[1] + las.header.maxs[1]) / 2
+
+        src_crs = las.header.parse_crs()
+        if src_crs is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Point cloud file (.las, .laz) does not have a CRS, which is required to display on the map",
+            )
+
+        transformer = Transformer.from_crs(src_crs, 4326, always_xy=True)
+        lon, lat = transformer.transform(mid_x, mid_y)
+        min_x, min_y, min_z = las.header.mins
+        max_x, max_y, max_z = las.header.maxs
+
+    min_lon, min_lat = transformer.transform(min_x, min_y)
+    max_lon, max_lat = transformer.transform(max_x, max_y)
+
+    bounds = [min_lon, min_lat, max_lon, max_lat]
+
+    metadata["pointcloud_anchor"] = {"lon": lon, "lat": lat}
+    metadata["pointcloud_z_range"] = [min_z, max_z]
+
+    temp_dir = tempfile.mkdtemp()
+    auxiliary_temp_file_path = os.path.join(temp_dir, "4326.laz")
+    las2las_cmd = [
+        "las2las64",
+        "-i",
+        temp_file_path,
+        "-set_version",
+        "1.3",
+        "-proj_epsg",
+        "4326",
+        "-o",
+        auxiliary_temp_file_path,
+    ]
+
+    try:
+        with tracer.start_as_current_span("internal_upload_layer.las2las"):
+            process = await asyncio.create_subprocess_exec(*las2las_cmd)
+            await process.wait()
+
+        if not os.path.exists(auxiliary_temp_file_path):
+            raise Exception("las2las did not create output file")
+        lasinfo_cmd = ["lasinfo64", auxiliary_temp_file_path]
+        lasinfo_process = await asyncio.create_subprocess_exec(
+            *lasinfo_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await lasinfo_process.wait()
+
+        if lasinfo_process.returncode != 0:
+            raise Exception(
+                f"Output file validation failed - lasinfo64 returned exit code {lasinfo_process.returncode}"
+            )
+
+    except Exception as e:
+        print(f"Error converting point cloud to EPSG:4326: {str(e)}")
+        raise e
+
+    new_temp_file_path = auxiliary_temp_file_path
+    return new_temp_file_path, bounds, temp_dir
+
+
+def preprocess_raster(temp_file_path: str, metadata: dict):
+    bounds = None
+    ds = gdal.Open(temp_file_path)
+    if ds:
+        gt = ds.GetGeoTransform()
+        width = ds.RasterXSize
+        height = ds.RasterYSize
+
+        xmin = gt[0]
+        ymax = gt[3]
+        xmax = gt[0] + width * gt[1] + height * gt[2]
+        ymin = gt[3] + width * gt[4] + height * gt[5]
+
+        bounds = [xmin, ymin, xmax, ymax]
+
+        src_crs = ds.GetProjection()
+        if src_crs:
+            src_srs = osr.SpatialReference()
+            src_srs.ImportFromWkt(src_crs)
+            epsg_code = src_srs.GetAuthorityCode(None)
+            if epsg_code:
+                metadata["original_srid"] = int(epsg_code)
+
+        if src_crs and "EPSG:4326" not in src_crs and "WGS84" not in src_crs:
+            src_srs = osr.SpatialReference()
+            src_srs.ImportFromWkt(src_crs)
+            transformer = Transformer.from_crs(
+                src_srs.ExportToProj4(), "EPSG:4326", always_xy=True
+            )
+            xmin, ymin = transformer.transform(bounds[0], bounds[1])
+            xmax, ymax = transformer.transform(bounds[2], bounds[3])
+
+            bounds = [xmin, ymin, xmax, ymax]
+
+        if ds.RasterCount == 1:
+            try:
+                band = ds.GetRasterBand(1)
+                stats = band.ComputeStatistics(False)  # [min, max, mean, stdev]
+                min_val, max_val = stats[0], stats[1]
+                metadata["raster_value_stats_b1"] = {
+                    "min": min_val,
+                    "max": max_val,
+                }
+            except Exception as e:
+                print(f"Error computing raster statistics: {str(e)}")
+        ds = None
+
+    return bounds
 
 
 def validate_remote_url(url: str, source_type: str) -> str:
@@ -1295,8 +1416,6 @@ async def internal_upload_layer(
                         )
                     except Exception as e:
                         if temp_dir:
-                            import shutil
-
                             shutil.rmtree(temp_dir, ignore_errors=True)
                         raise HTTPException(
                             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1341,8 +1460,6 @@ async def internal_upload_layer(
                 finally:
                     # Clean up temp directory if it exists
                     if temp_dir:
-                        import shutil
-
                         shutil.rmtree(temp_dir, ignore_errors=True)
 
             # If this is a ZIP file, process it for shapefiles and convert to GeoPackage
@@ -1383,96 +1500,19 @@ async def internal_upload_layer(
                     print(f"Error processing ZIP file: {str(e)}")
                     # Clean up temp directory if it exists
                     if temp_dir:
-                        import shutil
-
                         shutil.rmtree(temp_dir, ignore_errors=True)
                     raise HTTPException(
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                         detail=f"Error processing ZIP file: {str(e)}",
                     )
             elif layer_type == "point_cloud":
-                # handle it here because we're only going to upload .laz files
-                import laspy
-                import pyproj
-
-                with tracer.start_as_current_span("internal_upload_layer.laspy"):
-                    las = laspy.read(temp_file_path)
-
-                    # centre of the header bounding box
-                    mid_x = (las.header.mins[0] + las.header.maxs[0]) / 2
-                    mid_y = (las.header.mins[1] + las.header.maxs[1]) / 2
-
-                    src_crs = las.header.parse_crs()
-                    if src_crs is None:
-                        raise HTTPException(
-                            status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="Point cloud file (.las, .laz) does not have a CRS, which is required to display on the map",
-                        )
-
-                    # Create transformer for CRS conversion
-                    transformer = pyproj.Transformer.from_crs(
-                        src_crs, 4326, always_xy=True
-                    )
-
-                    # lon/lat in WGS-84 for anchor point
-                    lon, lat = transformer.transform(mid_x, mid_y)
-
-                    # Calculate bounds in WGS84
-                    min_x, min_y, min_z = las.header.mins
-                    max_x, max_y, max_z = las.header.maxs
-
-                # Transform bounds to WGS84
-                min_lon, min_lat = transformer.transform(min_x, min_y)
-                max_lon, max_lat = transformer.transform(max_x, max_y)
-
-                bounds = [min_lon, min_lat, max_lon, max_lat]
-
-                metadata_dict["pointcloud_anchor"] = {"lon": lon, "lat": lat}
-                metadata_dict["pointcloud_z_range"] = [min_z, max_z]
-
-                # generate a new .laz file
-                temp_dir = tempfile.mkdtemp()
-                auxiliary_temp_file_path = os.path.join(temp_dir, "4326.laz")
-                las2las_cmd = [
-                    "las2las64",
-                    "-i",
-                    temp_file_path,
-                    "-set_version",
-                    "1.3",
-                    "-proj_epsg",
-                    "4326",
-                    "-o",
-                    auxiliary_temp_file_path,
-                ]
-
-                try:
-                    with tracer.start_as_current_span("internal_upload_layer.las2las"):
-                        process = await asyncio.create_subprocess_exec(*las2las_cmd)
-                        await process.wait()
-
-                    # Check if output file was created and is valid using lasinfo64
-                    if not os.path.exists(auxiliary_temp_file_path):
-                        raise Exception("las2las did not create output file")
-
-                    # Validate the output file using lasinfo64
-                    lasinfo_cmd = ["lasinfo64", auxiliary_temp_file_path]
-                    lasinfo_process = await asyncio.create_subprocess_exec(
-                        *lasinfo_cmd,
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                    )
-                    await lasinfo_process.wait()
-
-                    if lasinfo_process.returncode != 0:
-                        raise Exception(
-                            f"Output file validation failed - lasinfo64 returned exit code {lasinfo_process.returncode}"
-                        )
-
-                except Exception as e:
-                    print(f"Error converting point cloud to EPSG:4326: {str(e)}")
-                    raise e
-                # upload the new .laz file instead
-                temp_file_path = auxiliary_temp_file_path
+                new_path, pc_bounds, pc_temp_dir = await preprocess_point_cloud(
+                    temp_file_path, metadata_dict
+                )
+                temp_file_path = new_path
+                bounds = pc_bounds
+                # ensure later cleanup matches previous behavior
+                temp_dir = pc_temp_dir
 
             # Upload file to S3/MinIO
             await s3_client.upload_file(
@@ -1483,67 +1523,7 @@ async def internal_upload_layer(
             geometry_type = "unknown"
             feature_count = None
             if layer_type == "raster":
-                # Use GDAL to get bounds for raster files
-                ds = gdal.Open(temp_file_path)
-                if ds:
-                    gt = ds.GetGeoTransform()
-                    width = ds.RasterXSize
-                    height = ds.RasterYSize
-
-                    # Calculate corner coordinates
-                    xmin = gt[0]
-                    ymax = gt[3]
-                    xmax = gt[0] + width * gt[1] + height * gt[2]
-                    ymin = gt[3] + width * gt[4] + height * gt[5]
-
-                    bounds = [xmin, ymin, xmax, ymax]
-
-                    # Check if CRS is not EPSG:4326
-                    src_crs = ds.GetProjection()
-                    if src_crs:
-                        # Store EPSG code if available
-                        src_srs = osr.SpatialReference()
-                        src_srs.ImportFromWkt(src_crs)
-                        epsg_code = src_srs.GetAuthorityCode(None)
-                        if epsg_code:
-                            metadata_dict["original_srid"] = int(epsg_code)
-
-                    if (
-                        src_crs
-                        and "EPSG:4326" not in src_crs
-                        and "WGS84" not in src_crs
-                    ):
-                        # Create transformer from source CRS to WGS84
-                        src_srs = osr.SpatialReference()
-                        src_srs.ImportFromWkt(src_crs)
-                        transformer = Transformer.from_crs(
-                            src_srs.ExportToProj4(), "EPSG:4326", always_xy=True
-                        )
-
-                        # Transform the bounds
-                        xmin, ymin = transformer.transform(bounds[0], bounds[1])
-                        xmax, ymax = transformer.transform(bounds[2], bounds[3])
-
-                        bounds = [xmin, ymin, xmax, ymax]
-
-                    # Get statistics for single-band rasters
-                    if ds.RasterCount == 1:
-                        try:
-                            band = ds.GetRasterBand(1)
-                            # ComputeStatistics(approx_ok, force)
-                            stats = band.ComputeStatistics(
-                                False
-                            )  # [min, max, mean, stdev]
-                            min_val, max_val = stats[0], stats[1]
-                            metadata_dict["raster_value_stats_b1"] = {
-                                "min": min_val,
-                                "max": max_val,
-                            }
-                        except Exception as e:
-                            print(f"Error computing raster statistics: {str(e)}")
-
-                    # Close dataset
-                    ds = None
+                bounds = preprocess_raster(temp_file_path, metadata_dict)
             elif layer_type == "point_cloud":
                 # handled above
                 pass
@@ -1650,8 +1630,6 @@ async def internal_upload_layer(
 
             # Cleanup temp_dir if it exists
             if temp_dir:
-                import shutil
-
                 shutil.rmtree(temp_dir, ignore_errors=True)
 
             # Return success response
