@@ -434,12 +434,12 @@ export default function ProjectView() {
     (acceptedFiles: File[]) => {
       if (!versionId || acceptedFiles.length === 0) return;
 
-      const maxFileSize = 100 * 1024 * 1024; // 100MB in bytes
+      const maxFileSize = 500 * 1024 * 1024; // 500MB in bytes
 
       // Filter out files that are too large
       const validFiles = acceptedFiles.filter((file) => {
         if (file.size > maxFileSize) {
-          toast.error(`File "${file.name}" is too large. Files over 100MB aren't supported yet.`);
+          toast.error(`File "${file.name}" is too large. Files over 500MB aren't supported yet.`);
           return false;
         }
         return true;
