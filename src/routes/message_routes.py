@@ -65,6 +65,7 @@ from src.routes.postgres_routes import (
     generate_id,
     get_map_description,
     internal_upload_layer,
+    InternalLayerUploadResponse,
 )
 from src.geoprocessing.dispatch import (
     UnsupportedAlgorithmError,
@@ -614,13 +615,15 @@ async def run_geoprocessing_tool(
                         file=io.BytesIO(file_content),
                     )
 
-                    upload_result = await internal_upload_layer(
-                        map_id=map_id,
-                        file=upload_file,
-                        layer_name=filename,
-                        add_layer_to_map=False,
-                        user_id=user_id,
-                        project_id=project_id,
+                    upload_result: InternalLayerUploadResponse = (
+                        await internal_upload_layer(
+                            map_id=map_id,
+                            file=upload_file,
+                            layer_name=filename,
+                            add_layer_to_map=False,
+                            user_id=user_id,
+                            project_id=project_id,
+                        )
                     )
 
                     created_layers.append(
