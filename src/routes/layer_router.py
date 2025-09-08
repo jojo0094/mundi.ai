@@ -253,7 +253,7 @@ async def get_layer_cog_tif(
                         except subprocess.CalledProcessError:
                             raise HTTPException(
                                 status_code=500,
-                                detail=f"COG generation failed",
+                                detail="COG generation failed",
                             )
 
                         # Upload the COG file to S3

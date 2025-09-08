@@ -80,8 +80,9 @@ from typing import Callable
 from opentelemetry import trace
 from src.dag import DAGEditOperationResponse
 
-fiona.drvsupport.supported_drivers["WFS"] = "r"
-fiona.drvsupport.supported_drivers["PMTiles"] = "r"
+fiona.drvsupport.supported_drivers["WFS"] = "r"  # type: ignore[attr-defined]
+fiona.drvsupport.supported_drivers["PMTiles"] = "r"  # type: ignore[attr-defined]
+fiona.drvsupport.supported_drivers["KML"] = "r"  # type: ignore[attr-defined]
 
 
 logger = logging.getLogger(__name__)
