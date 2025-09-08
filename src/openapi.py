@@ -147,7 +147,7 @@ When sending requests, set the `Authorization` header to `Bearer YOUR_API_KEY`. 
 ```py
 # 1. create a new map project
 created_map = httpx.post(
-    "https://api.mundi.ai/api/maps/create",
+    "https://app.mundi.ai/api/maps/create",
     json={"title": "US political boundaries"},
     headers={"Authorization": f"Bearer {os.environ["MUNDI_API_KEY"]}"},
 ).json()
@@ -156,7 +156,7 @@ map_id, project_id = created_map["id"], created_map["project_id"]
 # 2. upload a GeoJSON file as a layer on that map
 with open("counties.geojson", "rb") as f:
     upload = httpx.post(
-        f"https://api.mundi.ai/api/maps/{map_id}/layers",
+        f"https://app.mundi.ai/api/maps/{map_id}/layers",
         files={"file": ("counties.geojson", f, "application/geo+json")},
         data={"layer_name": "US Counties", "add_layer_to_map": True},
         headers={"Authorization": f"Bearer {os.environ["MUNDI_API_KEY"]}"},

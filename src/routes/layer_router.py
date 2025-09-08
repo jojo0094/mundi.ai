@@ -899,7 +899,7 @@ async def update_layer(
 
     ```py
     result = httpx.patch(
-        "https://api.mundi.ai/api/layer/L4b2c3d4e5f6",
+        "https://app.mundi.ai/api/layer/L4b2c3d4e5f6",
         json={"name": "New name in layer list"},
         headers={"Authorization": f"Bearer {os.environ['MUNDI_API_KEY']}"}
     ).json()

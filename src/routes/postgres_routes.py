@@ -374,7 +374,7 @@ async def create_map(
 
     ```py
     result = httpx.post(
-        "https://api.mundi.ai/api/maps/create",
+        "https://app.mundi.ai/api/maps/create",
         json={"title": "Brazilian catchment areas"},
         headers={"Authorization": f"Bearer {os.environ['MUNDI_API_KEY']}"}
     ).json()
@@ -1103,7 +1103,7 @@ async def upload_layer(
     with open("brazil_watersheds.gpkg", "rb") as f:
         # project ID is PGJSkB1zj7fT, previous map ID is M4NzE8rk4FZS
         result = httpx.post(
-            f"https://api.mundi.ai/api/maps/M4NzE8rk4FZS/layers",
+            f"https://app.mundi.ai/api/maps/M4NzE8rk4FZS/layers",
             files={"file": ("brazil_watersheds.gpkg", f, "application/octet-stream")},
             data={"layer_name": "Amazon Basin Watersheds", "add_layer_to_map": True},
             headers={"Authorization": f"Bearer {os.environ['MUNDI_API_KEY']}"}
@@ -2574,7 +2574,7 @@ async def update_map(
 
     ```py
     result = httpx.patch(
-        "https://api.mundi.ai/api/maps/MWfqcRak59bo",
+        "https://app.mundi.ai/api/maps/MWfqcRak59bo",
         json={"basemap": "hybrid"},
         headers={"Authorization": f"Bearer {os.environ['MUNDI_API_KEY']}"}
     ).json()
