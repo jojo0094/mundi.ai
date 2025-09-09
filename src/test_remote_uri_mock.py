@@ -13,8 +13,104 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
+import asyncio
 import pytest
 from unittest.mock import patch
+
+
+@pytest.fixture
+def mock_esri_requests(monkeypatch):
+    ESRI_MARKER = "arcgisonline.com/arcgis/rest/services/PoolPermits/FeatureServer"
+
+    real_cpe = asyncio.create_subprocess_exec
+
+    async def patched_cpe(*cmd, **kwargs):
+        exe = os.path.basename(str(cmd[0]))
+
+        # Only on the first ESRIJSON fetch: swap remote URL with local ESRIJSON fixture and run real process
+        if exe == "ogr2ogr" and any(
+            (isinstance(a, str) and (a.startswith("ESRIJSON:") or ESRI_MARKER in a))
+            for a in cmd
+        ):
+            new_cmd = list(cmd)
+            for i, a in enumerate(new_cmd):
+                if isinstance(a, str) and (
+                    a.startswith("ESRIJSON:") or ESRI_MARKER in a
+                ):
+                    # Use the local ESRIJSON fixture so GDAL reads via ESRIJSON driver
+                    fixture_path = os.path.abspath(
+                        os.path.join(
+                            os.path.dirname(__file__),
+                            "..",
+                            "test_fixtures",
+                            "esri_pool_permits_sample.esri.json",
+                        )
+                    )
+                    new_cmd[i] = f"ESRIJSON:{fixture_path}"
+                    break
+
+            real_proc = await real_cpe(*new_cmd, **kwargs)
+
+            class _ProxyProc:
+                def __init__(self, p):
+                    self._p = p
+                    self.returncode = None
+
+                async def communicate(self):
+                    out, err = await self._p.communicate()
+                    self.returncode = self._p.returncode
+                    return out, err
+
+                async def wait(self):
+                    rc = await self._p.wait()
+                    self.returncode = rc
+                    return rc
+
+            return _ProxyProc(real_proc)
+
+        return await real_cpe(*cmd, **kwargs)
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", patched_cpe)
+
+    import fiona
+    from fiona.drvsupport import supported_drivers
+
+    supported_drivers["ESRIJSON"] = "r"
+
+    real_fiona_open = fiona.open
+
+    def patched_fiona_open(path, *args, **kwargs):
+        if isinstance(path, str) and (
+            path.startswith("ESRIJSON:") or ESRI_MARKER in path
+        ):
+            fixture_path = os.path.abspath(
+                os.path.join(
+                    os.path.dirname(__file__),
+                    "..",
+                    "test_fixtures",
+                    "esri_pool_permits_sample.esri.json",
+                )
+            )
+            # Open the local ESRIJSON file using the ESRIJSON driver
+            return real_fiona_open(fixture_path, driver="ESRIJSON", *args, **kwargs)
+        return real_fiona_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(fiona, "open", patched_fiona_open)
+
+    # Short-circuit URL validation for ESRIJSON to avoid DNS/network
+    from src.routes import postgres_routes as pr2
+
+    real_validate = pr2.validate_remote_url
+
+    def patched_validate_remote_url(url: str, source_type: str) -> str:
+        if isinstance(url, str) and url.startswith("ESRIJSON:"):
+            return url
+        return real_validate(url, source_type)
+
+    monkeypatch.setattr(
+        "src.routes.postgres_routes.validate_remote_url", patched_validate_remote_url
+    )
 
 
 @pytest.mark.anyio
@@ -190,6 +286,7 @@ async def test_wfs_with_pmtiles_generation(auth_client):
     assert layer_id in [layer["id"] for layer in resp["layers"]]
 
 
+@pytest.mark.usefixtures("mock_esri_requests")
 @pytest.mark.anyio
 async def test_send_message_with_all_remote_layers(auth_client):
     """Test /send message functionality with all three types of remote layers attached to a map."""
@@ -390,12 +487,13 @@ async def test_send_message_with_all_remote_layers(auth_client):
 
         # Test ESRI Feature Service layer description
         assert "Pool Permits" in all_system_content
-        assert "Feature Count: 983" in all_system_content
-        assert "Dataset Bounds: -117.46"
+        assert "Feature Count: 3" in all_system_content
+        assert "Dataset Bounds: -117.46" in all_system_content
         assert "apn" in all_system_content
         assert "Driver: ESRIJSON" in all_system_content
 
 
+@pytest.mark.usefixtures("mock_esri_requests")
 @pytest.mark.anyio
 async def test_esri_feature_service_with_pmtiles_generation(auth_client):
     """Test ESRI Feature Service processing with PMTiles generation."""
@@ -445,6 +543,7 @@ async def test_esri_feature_service_with_pmtiles_generation(auth_client):
     )
 
 
+@pytest.mark.usefixtures("mock_esri_requests")
 @pytest.mark.anyio
 async def test_esri_url_with_frontend_transformation(auth_client):
     """Test ESRI Feature Service with frontend-style URL transformation."""
