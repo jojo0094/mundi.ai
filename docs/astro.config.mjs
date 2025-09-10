@@ -64,6 +64,7 @@ export default defineConfig({
 									{ label: 'Visualizing point clouds', slug: 'guides/visualizing-point-clouds-las-laz' },
 									{ label: 'Switching basemaps', slug: 'guides/switching-basemaps-satellite-or-traditional-vector' },
 									{ label: 'Embedding into websites', slug: 'guides/embedding-maps-into-websites' },
+									{ label: 'AI Georeferencer', slug: 'guides/ai-georeferencer-for-aerial-imagery' },
 								],
 							},
 							{
