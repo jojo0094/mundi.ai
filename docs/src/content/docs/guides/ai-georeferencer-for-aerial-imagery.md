@@ -112,6 +112,14 @@ The ZIP file contains:
 
 The GeoTIFF will be in the projection you requested, which defaults to `EPSG:3857`.
 
+Here is the scanned analog aerial photograph that we mentioned earlier, after using
+the AI Georeferencer on it while zoomed into Santa Barbara, CA. Note that it's been rotated nearly
+180° automatically by the AI.
+
+![aerial photograph open in QGIS, georeferenced by AI](../../../assets/ai-georeferencer/rotated.jpg)
+
+You can drag the resulting GeoTIFF into most GIS software, like [QGIS](https://qgis.org) or [Mundi](https://app.mundi.ai).
+
 ## Accuracy and troubleshooting
 
 Once the AI successfully locates your image, you should expect **1-3 meter
