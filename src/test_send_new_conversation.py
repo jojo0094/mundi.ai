@@ -14,6 +14,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import pytest
+import os
+import random
+from pathlib import Path
 from unittest.mock import patch, AsyncMock
 from openai.types.chat import (
     ChatCompletionMessage,
@@ -32,13 +35,59 @@ class MockResponse:
         self.choices = [MockChoice(content, tool_calls)]
 
 
+@pytest.fixture
+def sync_test_map_with_vector_layers(sync_auth_client):
+    map_payload = {
+        "title": "Geoprocessing Test Map",
+        "description": "Test map for geoprocessing operations with vector layers",
+    }
+    map_response = sync_auth_client.post("/api/maps/create", json=map_payload)
+    assert map_response.status_code == 200, f"Failed to create map: {map_response.text}"
+    current_map_id = map_response.json()["id"]
+    layer_ids = {}
+
+    def _upload_layer(file_name, layer_name_in_db, map_id):
+        file_path = str(Path(__file__).parent.parent / "test_fixtures" / file_name)
+        if not os.path.exists(file_path):
+            pytest.skip(f"Test file {file_path} not found")
+        with open(file_path, "rb") as f:
+            layer_response = sync_auth_client.post(
+                f"/api/maps/{map_id}/layers",
+                files={"file": (file_name, f, "application/octet-stream")},
+                data={"layer_name": layer_name_in_db},
+            )
+            assert layer_response.status_code == 200, (
+                f"Failed to upload layer {file_name}: {layer_response.text}"
+            )
+            response_data = layer_response.json()
+            return response_data["id"], response_data["dag_child_map_id"]
+
+    random.seed(42)
+    layer_id, current_map_id = _upload_layer(
+        "barcelona_beaches.fgb", "Barcelona Beaches", current_map_id
+    )
+    layer_ids["beaches_layer_id"] = layer_id
+
+    layer_id, current_map_id = _upload_layer(
+        "barcelona_cafes.fgb", "Barcelona Cafes", current_map_id
+    )
+    layer_ids["cafes_layer_id"] = layer_id
+
+    layer_id, current_map_id = _upload_layer(
+        "idaho_weatherstations.geojson", "Idaho Weather Stations", current_map_id
+    )
+    layer_ids["idaho_stations_layer_id"] = layer_id
+
+    return {"map_id": current_map_id, **layer_ids}
+
+
 @pytest.mark.anyio
 async def test_chat_completions(
-    test_map_with_vector_layers,
+    sync_test_map_with_vector_layers,
     sync_auth_client,
     websocket_url_for_map,
 ):
-    map_id = test_map_with_vector_layers["map_id"]
+    map_id = sync_test_map_with_vector_layers["map_id"]
 
     response_queue = [
         MockResponse("hello"),

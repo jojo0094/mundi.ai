@@ -15,6 +15,9 @@
 
 import pytest
 import json
+import os
+import random
+from pathlib import Path
 from unittest.mock import patch, AsyncMock
 from src.structures import get_async_db_connection
 from openai.types.chat import (
@@ -36,16 +39,51 @@ class MockResponse:
         self.choices = [MockChoice(content, tool_calls)]
 
 
+@pytest.fixture
+def sync_test_map_with_vector_layers(sync_auth_client):
+    map_response = sync_auth_client.post(
+        "/api/maps/create",
+        json={
+            "title": "Geoprocessing Test Map",
+        },
+    )
+    assert map_response.status_code == 200, f"Failed to create map: {map_response.text}"
+    data = map_response.json()
+    map_id = data["id"]
+    project_id = data["project_id"]
+    layer_ids = {}
+
+    def _upload_layer(file_name, layer_name_in_db):
+        file_path = str(Path(__file__).parent.parent / "test_fixtures" / file_name)
+        assert os.path.exists(file_path)
+        with open(file_path, "rb") as f:
+            layer_response = sync_auth_client.post(
+                f"/api/maps/{map_id}/layers",
+                files={"file": (file_name, f, "application/octet-stream")},
+                data={"layer_name": layer_name_in_db},
+            )
+            assert layer_response.status_code == 200, (
+                f"Failed to upload layer {file_name}: {layer_response.text}"
+            )
+            return layer_response.json()["id"]
+
+    random.seed(42)
+    layer_ids["cafes_layer_id"] = _upload_layer(
+        "barcelona_cafes.fgb", "Barcelona Cafes"
+    )
+    return {"map_id": map_id, "project_id": project_id, **layer_ids}
+
+
 @pytest.mark.anyio
 async def test_chat_completions(
-    test_map_with_vector_layers,
+    sync_test_map_with_vector_layers,
     auth_client,
     sync_auth_client,
     websocket_url_for_map,
 ):
-    layer_id = test_map_with_vector_layers["cafes_layer_id"]
-    map_id = test_map_with_vector_layers["map_id"]
-    project_id = test_map_with_vector_layers["project_id"]
+    layer_id = sync_test_map_with_vector_layers["cafes_layer_id"]
+    map_id = sync_test_map_with_vector_layers["map_id"]
+    project_id = sync_test_map_with_vector_layers["project_id"]
 
     def create_response_queue():
         return [
@@ -209,14 +247,14 @@ async def test_chat_completions(
 
 @pytest.mark.anyio
 async def test_chat_completions_with_error(
-    test_map_with_vector_layers,
+    sync_test_map_with_vector_layers,
     auth_client,
     sync_auth_client,
     websocket_url_for_map,
 ):
-    layer_id = test_map_with_vector_layers["cafes_layer_id"]
-    map_id = test_map_with_vector_layers["map_id"]
-    project_id = test_map_with_vector_layers["project_id"]
+    layer_id = sync_test_map_with_vector_layers["cafes_layer_id"]
+    map_id = sync_test_map_with_vector_layers["map_id"]
+    project_id = sync_test_map_with_vector_layers["project_id"]
 
     def create_response_queue():
         return [
