@@ -92,7 +92,7 @@ see how well it aligns with the underlying base map.
 
 ![The georeferenced image is shown as a semi-transparent overlay on the map.](../../../assets/ai-georeferencer/preview.jpg)
 
-### Downloading the Result
+### Downloading as a GeoTIFF
 
 Once you are satisfied with a match, you can download the georeferenced
 output. Because the AI Georeferencer is a GPU-intensive process, downloading
@@ -168,7 +168,9 @@ Elevation Model (DEM) in its calculations. This may result in mountain ranges
 not being uniformly and correctly located. However, our reference aerial
 imagery is orthographic.
 
-## Region Support
+## Region support
+
+<iframe style="height: 400px;" src="https://app.mundi.ai/api/projects/embed/v1/PhVt9RyLXLMp.html"  width="800"  height="600"  frameborder="0"></iframe>
 
 Currently, the AI Georeferencer is available for the **lower 48 United States**.
 
