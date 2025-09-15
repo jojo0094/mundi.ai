@@ -172,7 +172,16 @@ imagery is orthographic.
 
 <iframe style="height: 400px;" src="https://app.mundi.ai/api/projects/embed/v1/PhVt9RyLXLMp.html"  width="800"  height="600"  frameborder="0"></iframe>
 
-Currently, the AI Georeferencer is available for the **lower 48 United States**.
+Currently, the AI Georeferencer is available for:
+
+- **Continental United States (lower 48 states)**
+- Netherlands
+- Spain
+- France
+- Switzerland
+- Taiwan
+
+All regions except CONUS have 30cm resolution. CONUS is at 1m resolution.
 
 We are adding new regions one by one to ensure our reference aerial imagery is
 high-resolution and accurately georectified. If you would like to request support
