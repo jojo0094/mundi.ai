@@ -78,6 +78,7 @@ from src.dependencies.postgres_connection import (
 )
 from typing import Callable
 from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
 from src.dag import DAGEditOperationResponse
 
 fiona.drvsupport.supported_drivers["WFS"] = "r"  # type: ignore[attr-defined]
@@ -2504,27 +2505,66 @@ async def render_map_internal(
 
         # Run the renderer using subprocess
         try:
-            process = await asyncio.create_subprocess_exec(
-                "xvfb-run",
-                "-a",
-                "node",
-                "src/renderer/render.js",
-                output_path,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-
-            stdout, stderr = await process.communicate(
-                input=json.dumps(input_data).encode()
-            )
-            print(f"Render output: {stdout}")
-            print(f"Render error: {stderr}")
-
-            if process.returncode != 0:
-                raise subprocess.CalledProcessError(
-                    process.returncode, "xvfb-run", output=stdout, stderr=stderr
+            with tracer.start_as_current_span("renderer.mbgl") as span:
+                process = await asyncio.create_subprocess_exec(
+                    "xvfb-run",
+                    "-a",
+                    "node",
+                    "src/renderer/render.js",
+                    output_path,
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
                 )
+
+                stdout, stderr = await process.communicate(
+                    input=json.dumps(input_data).encode()
+                )
+
+                def _iter_json_lines(buf: bytes):
+                    for line in buf.decode(errors="ignore").splitlines():
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            obj = json.loads(line)
+                        except Exception:
+                            continue
+                        yield obj
+
+                for m in list(_iter_json_lines(stdout)) + list(
+                    _iter_json_lines(stderr)
+                ):
+                    if isinstance(m, dict):
+                        sev = str(m.get("severity", "")).upper()
+                        text_val = m.get("text")
+                        if sev and sev != "INFO":
+                            if sev == "WARNING":
+                                try:
+                                    print(f"Renderer warning: {text_val}")
+                                except Exception:
+                                    pass
+                            elif sev == "ERROR":
+                                try:
+                                    span.record_exception(
+                                        RuntimeError(text_val or "renderer error")
+                                    )
+                                except Exception:
+                                    pass
+                                try:
+                                    span.set_status(
+                                        Status(
+                                            StatusCode.ERROR,
+                                            text_val or "renderer error",
+                                        )
+                                    )
+                                except Exception:
+                                    pass
+
+                if process.returncode != 0:
+                    raise subprocess.CalledProcessError(
+                        process.returncode, "xvfb-run", output=stdout, stderr=stderr
+                    )
 
             temp_output.seek(0)
             screenshot_data = temp_output.read()

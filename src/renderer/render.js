@@ -20,8 +20,6 @@ const sharp = require('sharp');
 const maplibregl = require('@maplibre/maplibre-gl-native');
 const geoViewport = require('@mapbox/geo-viewport');
 
-
-// Read input from STDIN
 let inputData = '';
 
 process.stdin.on('data', (chunk) => {
@@ -41,7 +39,20 @@ process.stdin.on('end', async () => {
 
   const map = new maplibregl.Map(options);
   map.load(style);
-  maplibregl.on('message', console.log)
+  maplibregl.on('message', (msg) => {
+    try {
+      console.log(JSON.stringify(msg));
+    } catch (e) {
+      try {
+        console.log(JSON.stringify({
+          class: msg && msg.class || 'Unknown',
+          severity: msg && msg.severity || 'INFO',
+          text: msg && msg.text || String(msg)
+        }));
+      } catch (_) {
+      }
+    }
+  })
 
   if (payload.center) {
     const center = Array.isArray(payload.center) ? payload.center : [0, 0];
@@ -80,7 +91,15 @@ process.stdin.on('end', async () => {
 
   map.render(options, (err, buffer) => {
     if (err) {
-      console.error('Render error:', err);
+      try {
+        console.error(JSON.stringify({
+          type: 'RenderError',
+          severity: 'ERROR',
+          message: (err && err.message) || String(err)
+        }));
+      } catch (_) {
+        try { console.error('Render error:', String(err)); } catch (_) {}
+      }
     } else {
       var image = sharp(buffer, {
         raw: {
