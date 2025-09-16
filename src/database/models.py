@@ -26,8 +26,9 @@ from sqlalchemy import (
     Float,
     ForeignKey,
 )
+
 import json
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import declarative_base, Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -163,7 +164,7 @@ class MapLayer(Base):
     owner_uuid = Column(UUID, nullable=False)
     name = Column(String, nullable=False)  # layer name
     s3_key = Column(String)
-    type: str = Column(
+    type: Mapped[str] = mapped_column(
         String, nullable=False
     )  # 'vector', 'raster', 'postgis', 'point_cloud'
     raster_cog_url = Column(String)  # DEPRECATED: unused field, can be NULL
