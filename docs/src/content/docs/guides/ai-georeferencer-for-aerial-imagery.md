@@ -176,6 +176,7 @@ Currently, the AI Georeferencer is available for:
 
 - **Continental United States (lower 48 states)**
 - Netherlands
+- Poland
 - Spain
 - France
 - Switzerland
