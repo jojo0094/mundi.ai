@@ -711,7 +711,11 @@ const LayerList: React.FC<LayerListProps> = ({
                   size="sm"
                   variant="ghost"
                   className="p-0.5 hover:cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
-                  onClick={() => setShowPostgisDialog(true)}
+                  onClick={() => {
+                    // Default to demo tab when available
+                    setConnectionMethod(demoConfig.available ? 'demo' : 'uri');
+                    setShowPostgisDialog(true);
+                  }}
                 >
                   <Database className="h-4 w-4" />
                 </Button>
