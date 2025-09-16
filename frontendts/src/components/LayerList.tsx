@@ -249,8 +249,12 @@ const LayerList: React.FC<LayerListProps> = ({
     } else if (connectionMethod === 'uri') {
       connectionUri = postgisForm.uri;
     } else {
-      // Build URI from form fields
-      connectionUri = `postgresql://${postgisForm.username}:${postgisForm.password}@${postgisForm.host}:${postgisForm.port}/${postgisForm.database}`;
+      // Build URI from form fields, URI-escaping sensitive/path components
+      const user = encodeURIComponent(postgisForm.username || '');
+      const pass = encodeURIComponent(postgisForm.password || '');
+      const db = encodeURIComponent(postgisForm.database || '');
+      // Do not encode host/port — they include reserved separators and IPv6 notation
+      connectionUri = `postgresql://${user}:${pass}@${postgisForm.host}:${postgisForm.port}/${db}`;
     }
 
     if (!connectionUri.trim() || (connectionMethod !== 'demo' && connectionUri === '')) {
