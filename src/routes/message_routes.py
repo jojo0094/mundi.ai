@@ -1906,6 +1906,7 @@ async def send_map_message(
     map_id: str,
     body: MessageSendRequest,
     background_tasks: BackgroundTasks,
+    await_end: bool = False,
     conversation: Conversation = Depends(get_or_create_conversation),
     session: UserContext = Depends(verify_session_required),
     postgis_provider: Callable = Depends(get_postgis_provider),
@@ -1990,19 +1991,32 @@ async def send_map_message(
         user_msg = MundiChatCompletionMessage(**user_msg_dict)
         sanitized_user_msg = convert_mundi_message_to_sanitized(user_msg)
 
-    # Start background task
-    background_tasks.add_task(
-        process_chat_interaction_task,
-        request,
-        map_id,
-        session,
-        user_id,
-        chat_args,
-        map_state,
-        conversation,
-        system_prompt_provider,
-        connection_manager,
-    )
+    # Start processing either synchronously (await_end=True) or in background
+    if await_end:
+        await process_chat_interaction_task(
+            request,
+            map_id,
+            session,
+            user_id,
+            chat_args,
+            map_state,
+            conversation,
+            system_prompt_provider,
+            connection_manager,
+        )
+    else:
+        background_tasks.add_task(
+            process_chat_interaction_task,
+            request,
+            map_id,
+            session,
+            user_id,
+            chat_args,
+            map_state,
+            conversation,
+            system_prompt_provider,
+            connection_manager,
+        )
 
     return MessageSendResponse(
         conversation_id=conversation.id,
