@@ -44,6 +44,7 @@ interface LayerListItemProps {
   onToggleVisibility?: (layerId: string) => void;
   onRename?: (layerId: string, newName: string) => void;
   title?: string;
+  isLoading?: boolean;
 }
 
 export const LayerListItem: React.FC<LayerListItemProps> = ({
@@ -64,6 +65,7 @@ export const LayerListItem: React.FC<LayerListItemProps> = ({
   onToggleVisibility,
   onRename,
   title,
+  isLoading = false,
 }) => {
   const [nameValue, setNameValue] = useState(name);
   const [isDebouncing, setIsDebouncing] = useState(false);
@@ -132,7 +134,11 @@ export const LayerListItem: React.FC<LayerListItemProps> = ({
   return (
     <div className={`${liClassName} flex items-center px-2 py-1 gap-2 group w-full ${className}`} title={title}>
       <div className="w-4 h-4 flex-shrink-0 flex items-center justify-center">
-        <GripVertical className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab" />
+        {isLoading ? (
+          <Loader2 className="w-3 h-3 animate-spin text-gray-300" />
+        ) : (
+          <GripVertical className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab" />
+        )}
       </div>
 
       <div className="flex items-center gap-2 flex-1">

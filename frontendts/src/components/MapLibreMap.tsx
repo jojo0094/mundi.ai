@@ -236,6 +236,8 @@ export default function MapLibreMap({
   const [layerSymbols, setLayerSymbols] = useState<{
     [layerId: string]: JSX.Element;
   }>({});
+  const [loadingSourceIds, setLoadingSourceIds] = useState<Set<string>>(new Set());
+
   const { data: basemapsData } = useQuery({
     queryKey: ['basemaps', 'available'],
     queryFn: async () => {
@@ -248,6 +250,13 @@ export default function MapLibreMap({
   });
   const availableBasemaps = basemapsData?.styles ?? [];
   const basemapDisplayNames = basemapsData?.display_names ?? {};
+
+  // Track per-source loading state: listeners are attached after map load
+
+  const loadingLayerIDs = useMemo(() => {
+    if (!mapData?.layers) return [] as string[];
+    return mapData.layers.map((l) => l.id).filter((id) => loadingSourceIds.has(id));
+  }, [mapData?.layers, loadingSourceIds]);
 
   const { data: demoConfigData } = useQuery({
     queryKey: ['projects', 'config', 'demo-postgis-available'],
@@ -715,6 +724,41 @@ export default function MapLibreMap({
 
         // Load cursor image initially
         loadCursorImage();
+
+        // Attach source data loading listeners
+        const clearLoading = (id: string) => {
+          setLoadingSourceIds((prev) => {
+            if (!prev.has(id)) return prev;
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+        };
+        const addLoading = (id: string) => {
+          setLoadingSourceIds((prev) => {
+            if (prev.has(id)) return prev;
+            const next = new Set(prev);
+            next.add(id);
+            return next;
+          });
+        };
+
+        const onSourceDataLoading = (e: any) => {
+          const id = (e && (e.sourceId || (e.source && e.source.id))) as string | undefined;
+          if (id) addLoading(id);
+        };
+        const onSourceData = (e: any) => {
+          const id = (e && (e.sourceId || (e.source && e.source.id))) as string | undefined;
+          if (!id) return;
+          if (e?.sourceDataType === 'idle' || e?.isSourceLoaded === true) {
+            clearLoading(id);
+          }
+        };
+        const onStyleData = () => setLoadingSourceIds(new Set());
+
+        newMap.on('sourcedataloading', onSourceDataLoading);
+        newMap.on('sourcedata', onSourceData);
+        newMap.on('styledata', onStyleData);
       });
 
       newMap.on('error', (e) => {
@@ -1121,6 +1165,7 @@ export default function MapLibreMap({
             hiddenLayerIDs={hiddenLayerIDs}
             toggleLayerVisibility={toggleLayerVisibility}
             errors={errors}
+            loadingLayerIDs={loadingLayerIDs}
           />
         )}
         {selectedFeature && (

@@ -68,6 +68,7 @@ interface LayerListProps {
   hiddenLayerIDs: string[];
   toggleLayerVisibility: (layerId: string) => void;
   errors: ErrorEntry[];
+  loadingLayerIDs?: string[];
 }
 
 const LayerList: React.FC<LayerListProps> = ({
@@ -90,6 +91,7 @@ const LayerList: React.FC<LayerListProps> = ({
   hiddenLayerIDs,
   toggleLayerVisibility,
   errors,
+  loadingLayerIDs,
 }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -101,8 +103,8 @@ const LayerList: React.FC<LayerListProps> = ({
   };
 
   // Component to render legend symbol for a layer
-  const LayerLegendSymbol = ({ layerDetails }: { layerDetails: MapLayer }) => {
-    // Return cached symbol if available, otherwise null
+  const LayerLegendSymbol = ({ layerDetails, isLoading }: { layerDetails: MapLayer; isLoading: boolean }) => {
+    // Return cached symbol and let LayerListItem handle spinner via isLoading prop
     return layerSymbols[layerDetails.id] || null;
   };
   const [connectionMethod, setConnectionMethod] = useState<'demo' | 'uri' | 'fields'>('uri');
@@ -365,7 +367,10 @@ const LayerList: React.FC<LayerListProps> = ({
                     isActive={hasActiveAction}
                     hoverText={hoverText}
                     normalText={normalText}
-                    legendSymbol={<LayerLegendSymbol layerDetails={layerDetails} />}
+                    legendSymbol={
+                      <LayerLegendSymbol layerDetails={layerDetails} isLoading={!!loadingLayerIDs?.includes(layerDetails.id)} />
+                    }
+                    isLoading={!!loadingLayerIDs?.includes(layerDetails.id)}
                     layerId={layerDetails.id}
                     isVisible={!hiddenLayerIDs.includes(layerDetails.id)}
                     title={errorTitle}
