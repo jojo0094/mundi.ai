@@ -39,6 +39,9 @@ import re
 from redis import Redis
 import tempfile
 import asyncio
+import io
+from PIL import Image
+from rio_tiler.io import Reader
 
 from src.utils import (
     get_bucket_name,
@@ -561,6 +564,66 @@ async def get_layer_laz(
 
     # Return a streaming response with the appropriate status and headers
     return StreamingResponse(stream_s3_file(), status_code=status_code, headers=headers)
+
+
+@layer_router.get(
+    "/layer/{layer_id}/{z}/{x}/{y}.png",
+    operation_id="get_raster_xyz_tile",
+)
+async def get_raster_xyz_tile(
+    z: int,
+    x: int,
+    y: int,
+    request: Request,
+    layer: MapLayer = Depends(get_layer),
+):
+    if layer.type != "raster":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Layer is not a raster type",
+        )
+
+    if z < 0 or x < 0 or y < 0 or x >= (1 << z) or y >= (1 << z):
+        raise HTTPException(status_code=400, detail="Invalid tile coordinates")
+
+    # prefer COG key from metadata when present; fall back to original s3_key
+    cog_key = (layer.metadata_dict or {}).get("cog_key")
+    s3_key = cog_key or layer.s3_key
+
+    bucket = get_bucket_name()
+    s3 = await get_async_s3_client()
+    asset_url = await s3.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": bucket, "Key": s3_key},
+        ExpiresIn=180,  # 3 minutes
+    )
+
+    try:
+        with Reader(asset_url) as src:
+            img = src.tile(x, y, z)
+
+        # png has alpha support; expect newer rio-tiler which returns bytes
+        content = img.render(img_format="PNG")
+        return Response(
+            content=content,
+            media_type="image/png",
+            headers={
+                "Cache-Control": "public, max-age=3600",
+                "Access-Control-Allow-Origin": "*",
+            },
+        )
+    except Exception:
+        # Return a fully transparent 256x256 PNG
+        buf = io.BytesIO()
+        Image.new("RGBA", (256, 256), (0, 0, 0, 0)).save(buf, format="PNG")
+        return Response(
+            content=buf.getvalue(),
+            media_type="image/png",
+            headers={
+                "Cache-Control": "public, max-age=3600",
+                "Access-Control-Allow-Origin": "*",
+            },
+        )
 
 
 @layer_router.get(

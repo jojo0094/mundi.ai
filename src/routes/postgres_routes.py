@@ -1077,8 +1077,27 @@ async def get_map_style_internal(
     if "sources" not in style_json:
         style_json["sources"] = {}
 
-    # Add COG raster layers to the style if not only showing inline sources
-    if not only_show_inline_sources:
+    if only_show_inline_sources:
+        for layer in raster_layers:
+            layer_id = layer["layer_id"]
+            source_id = f"raster-source-{layer_id}"
+            tile_url = f"{os.getenv('WEBSITE_DOMAIN')}/api/layer/{layer_id}/{{z}}/{{x}}/{{y}}.png"
+
+            style_json["sources"][source_id] = {
+                "type": "raster",
+                "tiles": [tile_url],
+                "tileSize": 256,
+                "minzoom": 0,
+                "maxzoom": 22,
+            }
+            style_json["layers"].append(
+                {
+                    "id": f"raster-layer-{layer_id}",
+                    "type": "raster",
+                    "source": source_id,
+                }
+            )
+    else:
         for idx, layer in enumerate(raster_layers, 1):
             layer_id = layer["layer_id"]
             source_id = f"cog-source-{layer_id}"
@@ -2563,7 +2582,10 @@ async def render_map_internal(
 
                 if process.returncode != 0:
                     raise subprocess.CalledProcessError(
-                        process.returncode or -1, "xvfb-run", output=stdout, stderr=stderr
+                        process.returncode or -1,
+                        "xvfb-run",
+                        output=stdout,
+                        stderr=stderr,
                     )
 
             temp_output.seek(0)

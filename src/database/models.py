@@ -163,7 +163,7 @@ class MapLayer(Base):
     owner_uuid = Column(UUID, nullable=False)
     name = Column(String, nullable=False)  # layer name
     s3_key = Column(String)
-    type = Column(
+    type: str = Column(
         String, nullable=False
     )  # 'vector', 'raster', 'postgis', 'point_cloud'
     raster_cog_url = Column(String)  # DEPRECATED: unused field, can be NULL
