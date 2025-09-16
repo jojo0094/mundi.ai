@@ -103,7 +103,7 @@ const LayerList: React.FC<LayerListProps> = ({
   };
 
   // Component to render legend symbol for a layer
-  const LayerLegendSymbol = ({ layerDetails, isLoading }: { layerDetails: MapLayer; isLoading: boolean }) => {
+  const LayerLegendSymbol = ({ layerDetails }: { layerDetails: MapLayer; isLoading: boolean }) => {
     // Return cached symbol and let LayerListItem handle spinner via isLoading prop
     return layerSymbols[layerDetails.id] || null;
   };
