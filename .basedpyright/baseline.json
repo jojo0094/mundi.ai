@@ -44,11 +44,11 @@
                 }
             },
             {
-                "code": "reportGeneralTypeIssues",
+                "code": "reportAssignmentType",
                 "range": {
-                    "startColumn": 15,
-                    "endColumn": 37,
-                    "lineCount": 1
+                    "startColumn": 16,
+                    "endColumn": 5,
+                    "lineCount": 3
                 }
             },
             {
@@ -352,14 +352,6 @@
             {
                 "code": "reportGeneralTypeIssues",
                 "range": {
-                    "startColumn": 7,
-                    "endColumn": 30,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportGeneralTypeIssues",
-                "range": {
                     "startColumn": 11,
                     "endColumn": 46,
                     "lineCount": 1
@@ -394,10 +386,10 @@
         ],
         "./src/routes/layer_router.py": [
             {
-                "code": "reportGeneralTypeIssues",
+                "code": "reportMissingImports",
                 "range": {
-                    "startColumn": 7,
-                    "endColumn": 29,
+                    "startColumn": 5,
+                    "endColumn": 17,
                     "lineCount": 1
                 }
             },
@@ -422,14 +414,6 @@
                 "range": {
                     "startColumn": 38,
                     "endColumn": 41,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportGeneralTypeIssues",
-                "range": {
-                    "startColumn": 7,
-                    "endColumn": 29,
                     "lineCount": 1
                 }
             },
@@ -468,14 +452,6 @@
             {
                 "code": "reportGeneralTypeIssues",
                 "range": {
-                    "startColumn": 7,
-                    "endColumn": 34,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportGeneralTypeIssues",
-                "range": {
                     "startColumn": 11,
                     "endColumn": 17,
                     "lineCount": 1
@@ -492,16 +468,16 @@
             {
                 "code": "reportArgumentType",
                 "range": {
-                    "startColumn": 44,
-                    "endColumn": 52,
+                    "startColumn": 38,
+                    "endColumn": 50,
                     "lineCount": 1
                 }
             },
             {
-                "code": "reportGeneralTypeIssues",
+                "code": "reportArgumentType",
                 "range": {
-                    "startColumn": 7,
-                    "endColumn": 29,
+                    "startColumn": 44,
+                    "endColumn": 52,
                     "lineCount": 1
                 }
             },
@@ -536,14 +512,6 @@
                 "range": {
                     "startColumn": 21,
                     "endColumn": 35,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportArgumentType",
-                "range": {
-                    "startColumn": 17,
-                    "endColumn": 27,
                     "lineCount": 1
                 }
             },
