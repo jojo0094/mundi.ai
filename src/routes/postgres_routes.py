@@ -2563,7 +2563,7 @@ async def render_map_internal(
 
                 if process.returncode != 0:
                     raise subprocess.CalledProcessError(
-                        process.returncode, "xvfb-run", output=stdout, stderr=stderr
+                        process.returncode or -1, "xvfb-run", output=stdout, stderr=stderr
                     )
 
             temp_output.seek(0)

@@ -1390,14 +1390,6 @@
                 }
             },
             {
-                "code": "reportArgumentType",
-                "range": {
-                    "startColumn": 20,
-                    "endColumn": 38,
-                    "lineCount": 1
-                }
-            },
-            {
                 "code": "reportGeneralTypeIssues",
                 "range": {
                     "startColumn": 66,
