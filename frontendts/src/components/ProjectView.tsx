@@ -74,9 +74,7 @@ export default function ProjectView() {
 
   useEffect(() => {
     // Poll only while there are connections actively documenting (no error yet)
-    const hasLoadingConnections = (projectSources || []).some(
-      (c) => !c.is_documented && !c.last_error_text,
-    );
+    const hasLoadingConnections = (projectSources || []).some((c) => !c.is_documented && !c.last_error_text);
     setSourcesRefetchInterval(hasLoadingConnections ? 500 : false);
   }, [projectSources]);
 

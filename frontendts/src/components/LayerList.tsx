@@ -559,11 +559,7 @@ const LayerList: React.FC<LayerListProps> = ({
                           const processed = connection.processed_tables_count ?? 0;
                           const total = connection.table_count ?? 0;
                           const isSummarizing = !(processed === 0 && total === 0) && processed >= total;
-                          return isSummarizing ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <DatabaseZap className="h-4 w-4" />
-                          );
+                          return isSummarizing ? <Loader2 className="h-4 w-4 animate-spin" /> : <DatabaseZap className="h-4 w-4" />;
                         })()}
                         {(() => {
                           const processed = connection.processed_tables_count ?? 0;
