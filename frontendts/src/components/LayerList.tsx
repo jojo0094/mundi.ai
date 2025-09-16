@@ -6,13 +6,13 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
-  CodeXml,
   Database,
   Info,
   Link,
   Loader2,
   Plus,
   Server,
+  Share2,
   Sheet,
   SignalHigh,
   SignalLow,
@@ -305,11 +305,11 @@ const LayerList: React.FC<LayerListProps> = ({
                   onClick={() => setShowShareModal(true)}
                   className="p-0.5 hover:cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                 >
-                  <CodeXml className="h-3 w-3" />
+                  <Share2 className="h-3 w-3" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Embed into website</p>
+                <p>Share link or embed map</p>
               </TooltipContent>
             </Tooltip>
 
