@@ -4,10 +4,11 @@ import { ShareEmbedModal } from '@mundi/ee';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
+  BookText,
   ChevronLeft,
   ChevronRight,
   Database,
-  Info,
+  DatabaseZap,
   Link,
   Loader2,
   Plus,
@@ -16,6 +17,7 @@ import {
   Sheet,
   SignalHigh,
   SignalLow,
+  Trash,
   Upload,
 } from 'lucide-react';
 import { Map as MLMap } from 'maplibre-gl';
@@ -508,34 +510,31 @@ const LayerList: React.FC<LayerListProps> = ({
               <div className="flex-1 h-px bg-gray-300 dark:bg-gray-600"></div>
             </div>
             <ul className="text-sm">
-              {projectSources.map((connection, index) =>
+              {(projectSources || []).map((connection, index) =>
                 connection.last_error_text ? (
                   <TooltipProvider key={index}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <li
-                          className={`flex items-center justify-between px-2 py-1 gap-2 hover:bg-slate-100 dark:hover:bg-gray-600 cursor-pointer group`}
-                          onClick={() => {
-                            deleteConnectionMutation.mutate({ projectId: project.id, connectionId: connection.connection_id });
-                          }}
-                        >
+                        <li className={`flex items-center justify-between px-2 py-1 gap-2 hover:bg-slate-100 dark:hover:bg-gray-600 group`}>
                           <span className="font-medium truncate flex items-center gap-2 text-red-400">
                             <span className="text-red-400">⚠</span>
                             Connection Error
                           </span>
-                          <div className="flex-shrink-0">
+                          <div className="flex-shrink-0 flex items-center gap-2">
                             <div className="group-hover:hidden">
                               <span className="text-xs text-red-400">Error</span>
                             </div>
-                            <div className="hidden group-hover:block w-4 h-4">
-                              <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                />
-                              </svg>
+                            <div className="hidden group-hover:flex items-center gap-2">
+                              <button
+                                title="Delete connection"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteConnectionMutation.mutate({ projectId: project.id, connectionId: connection.connection_id });
+                                }}
+                                className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-200 dark:hover:bg-gray-500 cursor-pointer text-red-400 hover:text-red-500"
+                              >
+                                <Trash className="w-4 h-4" />
+                              </button>
                             </div>
                           </div>
                         </li>
@@ -546,40 +545,111 @@ const LayerList: React.FC<LayerListProps> = ({
                     </Tooltip>
                   </TooltipProvider>
                 ) : !connection.is_documented ? (
-                  <li key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-2 mx-2 mb-2">
+                  <li key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-2 mx-2 mb-2 group">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate flex items-center gap-2">
-                        <Database className="h-4 w-4" />
-                        {connection.friendly_name || 'Loading...'}
+                        {(() => {
+                          const processed = connection.processed_tables_count ?? 0;
+                          const total = connection.table_count ?? 0;
+                          const isSummarizing = !(processed === 0 && total === 0) && processed >= total;
+                          return isSummarizing ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <DatabaseZap className="h-4 w-4" />
+                          );
+                        })()}
+                        {(() => {
+                          const processed = connection.processed_tables_count ?? 0;
+                          const total = connection.table_count ?? 0;
+                          if (processed === 0 && total === 0) return 'Connecting...';
+                          return processed < total ? 'Querying tables...' : 'Summarizing...';
+                        })()}
                       </span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
-                        {connection.processed_tables_count}/{connection.table_count}
-                      </span>
+                      <div className="flex-shrink-0 flex items-center gap-2">
+                        <div className="group-hover:hidden">
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {connection.processed_tables_count}/{connection.table_count}
+                          </span>
+                        </div>
+                        <div className="hidden group-hover:flex items-center gap-2">
+                          <a
+                            href={`/postgis/${connection.connection_id}`}
+                            title="View documentation"
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-200 dark:hover:bg-gray-500 cursor-pointer"
+                          >
+                            <BookText className="w-4 h-4 text-slate-600 dark:text-gray-300" />
+                          </a>
+                          <button
+                            title="Delete connection"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteConnectionMutation.mutate({ projectId: project.id, connectionId: connection.connection_id });
+                            }}
+                            className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-200 dark:hover:bg-gray-500 cursor-pointer text-slate-600 dark:text-gray-300 hover:text-red-500"
+                          >
+                            <Trash className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                      <div
-                        className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
-                        style={{ width: `${((connection.processed_tables_count ?? 0) / connection.table_count) * 100}%` }}
-                      />
-                    </div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">Documenting database...</div>
+                    {(() => {
+                      const processed = connection.processed_tables_count ?? 0;
+                      const total = connection.table_count ?? 0;
+                      const isConnecting = processed === 0 && total === 0;
+                      const isSummarizing = !isConnecting && processed >= total;
+                      const widthPct = isConnecting ? 0 : total > 0 ? Math.min(100, Math.max(0, (processed / total) * 100)) : 0;
+                      return (
+                        <>
+                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                            <div
+                              className={`bg-blue-600 h-1.5 rounded-full transition-all duration-300 ${isSummarizing ? 'animate-pulse' : ''}`}
+                              style={{ width: `${isSummarizing ? 100 : widthPct}%` }}
+                            />
+                          </div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                            {isConnecting
+                              ? 'Connecting...'
+                              : processed < total
+                                ? 'Understanding feature attributes...'
+                                : 'Takes about 30 seconds...'}
+                          </div>
+                        </>
+                      );
+                    })()}
                   </li>
                 ) : (
                   <li
                     key={index}
-                    className={`flex items-center justify-between px-2 py-1 gap-2 hover:bg-slate-100 dark:hover:bg-gray-600 cursor-pointer group ${connection.friendly_name === 'Loading...' ? 'animate-pulse' : ''}`}
-                    onClick={() => navigate(`/postgis/${connection.connection_id}`)}
+                    className={`flex items-center justify-between px-2 py-1 gap-2 hover:bg-slate-100 dark:hover:bg-gray-600 group ${connection.friendly_name === 'Loading...' ? 'animate-pulse' : ''}`}
                   >
                     <span className="font-medium truncate flex items-center gap-2" title={connection.friendly_name || undefined}>
-                      <Database className="h-4 w-4" />
+                      <DatabaseZap className="h-4 w-4" />
                       {connection.friendly_name}
                     </span>
-                    <div className="flex-shrink-0">
+                    <div className="flex-shrink-0 flex items-center gap-2">
                       <div className="group-hover:hidden">
                         <span className="text-xs text-slate-500 dark:text-gray-400">{connection.table_count} tables</span>
                       </div>
-                      <div className="hidden group-hover:block w-4 h-4">
-                        <Info className="w-4 h-4" />
+                      <div className="hidden group-hover:flex items-center gap-2">
+                        <a
+                          href={`/postgis/${connection.connection_id}`}
+                          title="View documentation"
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-200 dark:hover:bg-gray-500 cursor-pointer"
+                        >
+                          <BookText className="w-4 h-4 text-slate-600 dark:text-gray-300" />
+                        </a>
+                        <button
+                          title="Delete connection"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteConnectionMutation.mutate({ projectId: project.id, connectionId: connection.connection_id });
+                          }}
+                          className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-200 dark:hover:bg-gray-500 cursor-pointer text-slate-600 dark:text-gray-300 hover:text-red-500"
+                        >
+                          <Trash className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                   </li>

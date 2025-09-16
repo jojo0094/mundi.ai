@@ -40,8 +40,8 @@ export default function ProjectView() {
     throw new Error('No project ID');
   }
 
-  // State for controlling project query refetch interval
-  const [projectRefetchInterval, setProjectRefetchInterval] = useState<number | false>(false);
+  // State for controlling sources (PostGIS connections) refetch interval
+  const [sourcesRefetchInterval, setSourcesRefetchInterval] = useState<number | false>(false);
 
   // handle a single store of project<->map<->conversation data
   const { data: project } = useQuery({
@@ -54,7 +54,8 @@ export default function ProjectView() {
       }
       return (await res.json()) as MapProject;
     },
-    refetchInterval: projectRefetchInterval,
+    // Do not poll the project route; sources polling is handled below
+    refetchInterval: false,
   });
 
   // Fetch project PostGIS sources and update refetch interval while documenting
@@ -67,11 +68,16 @@ export default function ProjectView() {
     },
     retry: 5,
     retryDelay: (attempt) => 1000 * attempt,
+    // While any connection is still being documented, poll this endpoint
+    refetchInterval: sourcesRefetchInterval,
   });
 
   useEffect(() => {
-    const hasLoadingConnections = (projectSources || []).some((c) => !c.is_documented);
-    setProjectRefetchInterval(hasLoadingConnections ? 4000 : false);
+    // Poll only while there are connections actively documenting (no error yet)
+    const hasLoadingConnections = (projectSources || []).some(
+      (c) => !c.is_documented && !c.last_error_text,
+    );
+    setSourcesRefetchInterval(hasLoadingConnections ? 500 : false);
   }, [projectSources]);
 
   const [conversationId, setConversationId] = usePersistedState<number | null>('conversationId', [projectId], null);
