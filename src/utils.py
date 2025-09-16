@@ -53,18 +53,19 @@ def get_s3_client():
     )
 
 
-# shared session, each asyncio loop gets a client
+# shared session, cache client per asyncio loop and signature_version
 _session = aioboto3.Session()
 _clients = {}
 
 
-async def get_async_s3_client():
+async def get_async_s3_client(signature_version: str = "s3"):
     loop = asyncio.get_running_loop()
-    if loop not in _clients:
+    key = (loop, signature_version)
+    if key not in _clients:
         config = boto3.session.Config(
-            signature_version="s3",
+            signature_version=signature_version,
         )
-        _clients[loop] = await _session.client(
+        _clients[key] = await _session.client(
             "s3",
             endpoint_url=os.environ["S3_ENDPOINT_URL"],
             aws_access_key_id=os.environ["S3_ACCESS_KEY_ID"],
@@ -72,7 +73,7 @@ async def get_async_s3_client():
             region_name=os.environ["S3_DEFAULT_REGION"],
             config=config,
         ).__aenter__()
-    return _clients[loop]
+    return _clients[key]
 
 
 def get_bucket_name():

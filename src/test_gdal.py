@@ -190,11 +190,12 @@ async def test_dem_map_social_preview(dem_map_with_cog_layer, auth_client):
     )
 
     # Compare with reference image using the same function as in test_mbgl_renderer
+    # 0.000687 was a previous failure
     is_similar, diff_value = compare_images(
-        output_path, reference_image_path, threshold=0.001
+        output_path, reference_image_path, threshold=0.0002
     )
 
-    print(f"Image difference: {diff_value:.6f} (threshold: 0.001)")
+    print(f"Image difference: {diff_value:.6f} (threshold: 0.0002)")
     assert is_similar, f"Rendered image differs from reference (diff: {diff_value:.6f})"
 
 

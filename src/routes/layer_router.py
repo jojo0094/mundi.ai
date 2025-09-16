@@ -42,6 +42,7 @@ import asyncio
 import io
 from PIL import Image
 from rio_tiler.io import Reader
+from rio_tiler.colormap import cmap
 
 from src.utils import (
     get_bucket_name,
@@ -587,11 +588,11 @@ async def get_raster_xyz_tile(
         raise HTTPException(status_code=400, detail="Invalid tile coordinates")
 
     # prefer COG key from metadata when present; fall back to original s3_key
-    cog_key = (layer.metadata_dict or {}).get("cog_key")
-    s3_key = cog_key or layer.s3_key
+    metadata = layer.metadata_dict or {}
+    s3_key = metadata.get("cog_key") or layer.s3_key
 
     bucket = get_bucket_name()
-    s3 = await get_async_s3_client()
+    s3 = await get_async_s3_client(signature_version="s3v4")
     asset_url = await s3.generate_presigned_url(
         "get_object",
         Params={"Bucket": bucket, "Key": s3_key},
@@ -602,8 +603,21 @@ async def get_raster_xyz_tile(
         with Reader(asset_url) as src:
             img = src.tile(x, y, z)
 
-        # png has alpha support; expect newer rio-tiler which returns bytes
-        content = img.render(img_format="PNG")
+            if "raster_value_stats_b1" in metadata:
+                min_val = metadata["raster_value_stats_b1"]["min"]
+                max_val = metadata["raster_value_stats_b1"]["max"]
+
+                img.rescale(
+                    in_range=((min_val, max_val),),
+                    out_range=((0, 255),)
+                )
+
+                cm = cmap.get("cfastie")
+                content = img.render(img_format="PNG", colormap=cm)
+            else:
+                # png has alpha support; expect newer rio-tiler which returns bytes
+                content = img.render(img_format="PNG")
+
         return Response(
             content=content,
             media_type="image/png",
