@@ -113,7 +113,6 @@ const LayerList: React.FC<LayerListProps> = ({
     database: '',
     username: '',
     password: '',
-    schema: 'public',
   });
   const [postgisError, setPostgisError] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -163,7 +162,6 @@ const LayerList: React.FC<LayerListProps> = ({
         database: '',
         username: '',
         password: '',
-        schema: 'public',
       });
 
       // Invalidate the project query to refresh the data
@@ -942,23 +940,6 @@ const LayerList: React.FC<LayerListProps> = ({
                           setPostgisForm((prev) => ({
                             ...prev,
                             database: e.target.value,
-                          }));
-                          setPostgisError(null);
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label htmlFor="schema" className="text-sm font-medium">
-                        Schema
-                      </label>
-                      <Input
-                        id="schema"
-                        placeholder="public"
-                        value={postgisForm.schema}
-                        onChange={(e) => {
-                          setPostgisForm((prev) => ({
-                            ...prev,
-                            schema: e.target.value,
                           }));
                           setPostgisError(null);
                         }}
