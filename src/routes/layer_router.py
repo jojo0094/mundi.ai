@@ -612,7 +612,7 @@ async def get_raster_xyz_tile(
                     out_range=((0, 255),)
                 )
 
-                cm = cmap.get("cfastie")
+                cm = cmap.get("spectral_r")
                 content = img.render(img_format="PNG", colormap=cm)
             else:
                 # png has alpha support; expect newer rio-tiler which returns bytes
