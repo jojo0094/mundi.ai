@@ -1081,7 +1081,7 @@ async def get_map_style_internal(
         for layer in raster_layers:
             layer_id = layer["layer_id"]
             source_id = f"raster-source-{layer_id}"
-            tile_url = f"{os.getenv('WEBSITE_DOMAIN')}/api/layer/{layer_id}/{{z}}/{{x}}/{{y}}.png"
+            tile_url = f"http://localhost:8000/api/layer/{layer_id}/{{z}}/{{x}}/{{y}}.png"
 
             style_json["sources"][source_id] = {
                 "type": "raster",
@@ -1176,7 +1176,7 @@ async def get_map_style_internal(
             style_json["sources"][layer_id] = {
                 "type": "vector",
                 "tiles": [
-                    f"{os.getenv('WEBSITE_DOMAIN')}/api/layer/{layer_id}/{{z}}/{{x}}/{{y}}.mvt"
+                    f"http://localhost:8000/api/layer/{layer_id}/{{z}}/{{x}}/{{y}}.mvt"
                 ],
                 "minzoom": 0,
                 "maxzoom": 17,

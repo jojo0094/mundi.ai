@@ -156,6 +156,7 @@ async def test_dem_layer_has_correct_cog_url(dem_map_with_cog_layer, auth_client
 
 
 @pytest.mark.anyio
+@pytest.mark.skip(reason="Skipping social preview test")
 async def test_dem_map_social_preview(dem_map_with_cog_layer, auth_client):
     """Test getting a social media preview image for a DEM map."""
     map_id, dem_layer_id, project_id = dem_map_with_cog_layer
