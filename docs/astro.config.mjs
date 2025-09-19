@@ -45,6 +45,7 @@ export default defineConfig({
 								items: [
 									{ label: 'Making your first map', slug: 'getting-started/making-your-first-map' },
 									{ label: 'Uploading files', slug: 'getting-started/uploading-files' },
+									{ label: 'Create maps from email', slug: 'getting-started/email-shapefiles-to-create-maps' },
 									{ label: 'ESRI Feature Server', slug: 'getting-started/esri-feature-server' },
 									{ label: 'OGC WFS', slug: 'getting-started/add-ogc-wfs-web-feature-service' },
 									{ label: 'Google Sheets', slug: 'getting-started/google-sheets' },
