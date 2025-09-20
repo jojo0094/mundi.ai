@@ -5,8 +5,8 @@ description: Mundi's AI Georeferencer can georectify aerial/satellite
 ---
 
 The [AI Georeferencer](https://app.mundi.ai/ee/georeferencer) in Mundi takes
-any PNG, JPEG, or TIFF, and turns it into a GeoTIFF automatically. It works by comparing your image
-directly to high resolution (1 meter/pixel) reference imagery to detect ground control
+any PNG, JPEG, WEBP, PDF or TIFF, and turns it into a GeoTIFF automatically. It works by comparing your image
+directly to local reference imagery to detect ground control
 points, just as you would if you were manually georectifying it in ArcGIS or QGIS.
 Our AI takes 10 seconds per image, on average, and gives you the ground control points (GCPs)
 so you can manually adjust after.
@@ -170,9 +170,13 @@ imagery is orthographic.
 
 ## Region support
 
-<iframe style="height: 400px;" src="https://app.mundi.ai/api/projects/embed/v1/PhVt9RyLXLMp.html"  width="800"  height="600"  frameborder="0"></iframe>
+The AI georeferencer has global support for up to 10 meter resolution with Sentinel-2. In specific regions,
+we have *high resolution* reference aerial imagery. We automatically route reference imagery from the highest
+resolution reference imagery we are licensed to use.
 
-Currently, the AI Georeferencer is available for:
+### High resolution regions
+
+<iframe style="height: 400px;" src="https://app.mundi.ai/api/projects/embed/v1/PhVt9RyLXLMp.html"  width="800"  height="600"  frameborder="0"></iframe>
 
 - **Continental United States (lower 48 states)**
 - Netherlands
@@ -181,9 +185,14 @@ Currently, the AI Georeferencer is available for:
 - France
 - Switzerland
 - Taiwan
+- Japan
 
 All regions except CONUS have 30cm resolution. CONUS is at 1m resolution.
 
 We are adding new regions one by one to ensure our reference aerial imagery is
 high-resolution and accurately georectified. If you would like to request support
 for a new region, please email us at [support@buntinglabs.com](mailto:support@buntinglabs.com).
+
+### Attribution
+
+*Sentinel-2 cloudless - [https://s2maps.eu](https://s2maps.eu) by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016 & 2017)*
