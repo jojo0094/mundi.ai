@@ -391,7 +391,7 @@ class MapLayerStyle(Base):
 class Conversation(Base):
     __tablename__ = "conversations"
 
-    id = Column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     project_id = Column(
         String(12), ForeignKey("user_mundiai_projects.id"), nullable=False
     )

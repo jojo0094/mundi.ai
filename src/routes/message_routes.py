@@ -46,7 +46,7 @@ from openai.types.chat.chat_completion_system_message_param import (
 from openai.types.chat.chat_completion_message_param import (
     ChatCompletionMessageParam,
 )
-from openai.types.chat import ChatCompletionMessageToolCallParam
+from openai.types.chat import ChatCompletionMessageToolCall
 from openai import APIError
 
 from src.symbology.llm import generate_maplibre_layers_for_layer_id
@@ -103,6 +103,11 @@ from src.database.models import (
 )
 from src.openstreetmap import download_from_openstreetmap, has_openstreetmap_api_key
 from src.routes.websocket import kue_ephemeral_action, kue_notify_error
+from src.tools.pyd import tool_from as tool_from_pyd
+from src.dependencies.pydantic_tools import (
+    get_pydantic_tool_calls,
+    PydanticToolRegistry,
+)
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -686,6 +691,7 @@ async def process_chat_interaction_task(
     conversation: Conversation,
     system_prompt_provider: SystemPromptProvider,
     connection_manager: PostgresConnectionManager,
+    pydantic_tool_calls: PydanticToolRegistry,
 ):
     # kick it off with a quick sleep, to detach from the event loop blocking /send
     await asyncio.sleep(0.1)
@@ -883,32 +889,6 @@ async def process_chat_interaction_task(
                             },
                         },
                     },
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": "zoom_to_bounds",
-                            "description": "Zoom the map to a specific bounding box in WGS84 coordinates. This will save the user's current zoom location to history and navigate to the new bounds.",
-                            "strict": True,
-                            "parameters": {
-                                "type": "object",
-                                "properties": {
-                                    "bounds": {
-                                        "type": "array",
-                                        "description": "Bounding box in WGS84 format [xmin, ymin, xmax, ymax]",
-                                        "items": {"type": "number"},
-                                        "minItems": 4,
-                                        "maxItems": 4,
-                                    },
-                                    "zoom_description": {
-                                        "type": "string",
-                                        "description": 'Complete message to display to the user while zooming, e.g. "Zooming to 39 selected parcels near Ohio"',
-                                    },
-                                },
-                                "required": ["bounds", "zoom_description"],
-                                "additionalProperties": False,
-                            },
-                        },
-                    },
                 ]
 
                 # Conditionally add OpenStreetMap tool if API key is configured
@@ -947,6 +927,10 @@ async def process_chat_interaction_task(
                             },
                         }
                     )
+
+                # add pydantic-defined tools to the payload
+                for name, (fn, arg_model, _mundi_model) in pydantic_tool_calls.items():
+                    tools_payload.append(tool_from_pyd(fn, arg_model))
 
                 all_tools = get_tools()
                 tools_payload.extend(all_tools)
@@ -1035,10 +1019,45 @@ async def process_chat_interaction_task(
                     break
 
                 for tool_call in assistant_message.tool_calls:
-                    tool_call: ChatCompletionMessageToolCallParam = tool_call
+                    tool_call: ChatCompletionMessageToolCall = tool_call
                     function_name = tool_call.function.name
                     tool_args = json.loads(tool_call.function.arguments)
                     tool_result = {}
+
+                    if function_name in pydantic_tool_calls:
+                        fn, ArgModel, MundiModel = pydantic_tool_calls[function_name]
+                        try:
+                            parsed_args = ArgModel(**(tool_args or {}))
+                        except Exception as e:
+                            tool_result = {
+                                "status": "error",
+                                "error": f"Invalid arguments for {function_name}: {e}",
+                            }
+                            await add_chat_completion_message(
+                                ChatCompletionToolMessageParam(
+                                    role="tool",
+                                    tool_call_id=tool_call.id,
+                                    content=json.dumps(tool_result),
+                                ),
+                            )
+                            continue
+
+                        mundi_args = MundiModel(
+                            user_uuid=user_id,
+                            conversation_id=conversation.id,
+                            map_id=map_id,
+                        )
+                        # Execute tool (all tools are async)
+                        tool_result = await fn(parsed_args, mundi_args)
+
+                        await add_chat_completion_message(
+                            ChatCompletionToolMessageParam(
+                                role="tool",
+                                tool_call_id=tool_call.id,
+                                content=json.dumps(tool_result),
+                            ),
+                        )
+                        continue
 
                     span.add_event(
                         "kue.tool_call_started",
@@ -1789,73 +1808,7 @@ async def process_chat_interaction_task(
                                     content=json.dumps(tool_result),
                                 ),
                             )
-                        elif function_name == "zoom_to_bounds":
-                            bounds = tool_args.get("bounds")
-                            description = tool_args.get("zoom_description", "")
 
-                            if not bounds or len(bounds) != 4:
-                                tool_result = {
-                                    "status": "error",
-                                    "error": "Invalid bounds. Must be an array of 4 numbers [west, south, east, north]",
-                                }
-                            else:
-                                try:
-                                    # Validate bounds format
-                                    west, south, east, north = bounds
-                                    if not all(
-                                        isinstance(coord, (int, float))
-                                        for coord in bounds
-                                    ):
-                                        raise ValueError(
-                                            "All bounds coordinates must be numbers"
-                                        )
-
-                                    if west >= east or south >= north:
-                                        raise ValueError(
-                                            "Invalid bounds: west must be < east and south must be < north"
-                                        )
-
-                                    if not (
-                                        -180 <= west <= 180
-                                        and -180 <= east <= 180
-                                        and -90 <= south <= 90
-                                        and -90 <= north <= 90
-                                    ):
-                                        raise ValueError(
-                                            "Bounds must be in valid WGS84 range"
-                                        )
-
-                                    # Send ephemeral action to trigger zoom on frontend
-                                    async with kue_ephemeral_action(
-                                        conversation.id,
-                                        description,
-                                        update_style_json=False,
-                                        bounds=bounds,
-                                    ):
-                                        await asyncio.sleep(0.5)
-
-                                    tool_result = {
-                                        "status": "success",
-                                        "bounds": bounds,
-                                    }
-                                except ValueError as e:
-                                    tool_result = {
-                                        "status": "error",
-                                        "error": str(e),
-                                    }
-                                except Exception as e:
-                                    tool_result = {
-                                        "status": "error",
-                                        "error": f"Error zooming to bounds: {str(e)}",
-                                    }
-
-                            await add_chat_completion_message(
-                                ChatCompletionToolMessageParam(
-                                    role="tool",
-                                    tool_call_id=tool_call.id,
-                                    content=json.dumps(tool_result),
-                                ),
-                            )
                         elif function_name in geoprocessing_function_names:
                             tool_result = await run_geoprocessing_tool(
                                 tool_call,
@@ -1917,6 +1870,7 @@ async def send_map_message(
     connection_manager: PostgresConnectionManager = Depends(
         get_postgres_connection_manager
     ),
+    pydantic_tool_calls: PydanticToolRegistry = Depends(get_pydantic_tool_calls),
 ):
     # get_conversation authenticates
     user_id = session.get_user_id()
@@ -2003,6 +1957,7 @@ async def send_map_message(
             conversation,
             system_prompt_provider,
             connection_manager,
+            pydantic_tool_calls,
         )
     else:
         background_tasks.add_task(
@@ -2016,6 +1971,7 @@ async def send_map_message(
             conversation,
             system_prompt_provider,
             connection_manager,
+            pydantic_tool_calls,
         )
 
     return MessageSendResponse(
