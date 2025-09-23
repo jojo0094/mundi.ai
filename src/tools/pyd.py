@@ -14,7 +14,18 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from typing import Any, Dict, Type
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+
+
+def _strip_titles(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        obj.pop("title", None)
+        for k in list(obj.keys()):
+            obj[k] = _strip_titles(obj[k])
+        return obj
+    if isinstance(obj, list):
+        return [_strip_titles(x) for x in obj]
+    return obj
 
 
 def tool_from(fn, model: Type[BaseModel]) -> Dict[str, Any]:
@@ -23,6 +34,7 @@ def tool_from(fn, model: Type[BaseModel]) -> Dict[str, Any]:
     if isinstance(schema, dict):
         schema.setdefault("type", "object")
         schema["additionalProperties"] = False
+        schema = _strip_titles(schema)
 
     return {
         "type": "function",
@@ -36,6 +48,8 @@ def tool_from(fn, model: Type[BaseModel]) -> Dict[str, Any]:
 
 
 class MundiToolCallMetaArgs(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     user_uuid: str
     conversation_id: int
     map_id: str
+    session: Any

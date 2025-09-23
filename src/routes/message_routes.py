@@ -101,7 +101,6 @@ from src.database.models import (
     MapLayer,
     Conversation,
 )
-from src.openstreetmap import download_from_openstreetmap, has_openstreetmap_api_key
 from src.routes.websocket import kue_ephemeral_action, kue_notify_error
 from src.tools.pyd import tool_from as tool_from_pyd
 from src.dependencies.pydantic_tools import (
@@ -891,43 +890,6 @@ async def process_chat_interaction_task(
                     },
                 ]
 
-                # Conditionally add OpenStreetMap tool if API key is configured
-                if has_openstreetmap_api_key():
-                    tools_payload.append(
-                        {
-                            "type": "function",
-                            "function": {
-                                "name": "download_from_openstreetmap",
-                                "description": "Download features from OSM and add to project as a cloud FlatGeobuf layer",
-                                "strict": True,
-                                "parameters": {
-                                    "type": "object",
-                                    "required": [
-                                        "tags",
-                                        "bbox",
-                                        "new_layer_name",
-                                    ],
-                                    "properties": {
-                                        "tags": {
-                                            "type": "string",
-                                            "description": "Tags to filter for e.g. leisure=park, use & to AND tags together e.g. highway=footway&name=*, no commas",
-                                        },
-                                        "bbox": {
-                                            "type": "array",
-                                            "description": "Bounding box in [xmin, ymin, xmax, ymax] format e.g. [9.023802,39.172149,9.280779,39.275211] for Cagliari, Italy",
-                                            "items": {"type": "number"},
-                                        },
-                                        "new_layer_name": {
-                                            "type": "string",
-                                            "description": "Human-friendly name e.g. Walking paths or Liquor stores in Seattle",
-                                        },
-                                    },
-                                    "additionalProperties": False,
-                                },
-                            },
-                        }
-                    )
-
                 # add pydantic-defined tools to the payload
                 for name, (fn, arg_model, _mundi_model) in pydantic_tool_calls.items():
                     tools_payload.append(tool_from_pyd(fn, arg_model))
@@ -1028,6 +990,7 @@ async def process_chat_interaction_task(
                         fn, ArgModel, MundiModel = pydantic_tool_calls[function_name]
                         try:
                             parsed_args = ArgModel(**(tool_args or {}))
+
                         except Exception as e:
                             tool_result = {
                                 "status": "error",
@@ -1042,13 +1005,21 @@ async def process_chat_interaction_task(
                             )
                             continue
 
-                        mundi_args = MundiModel(
-                            user_uuid=user_id,
-                            conversation_id=conversation.id,
-                            map_id=map_id,
-                        )
-                        # Execute tool (all tools are async)
-                        tool_result = await fn(parsed_args, mundi_args)
+                        try:
+                            mundi_args = MundiModel(
+                                user_uuid=user_id,
+                                conversation_id=conversation.id,
+                                map_id=map_id,
+                                session=session,
+                            )
+                            # Execute tool (all tools are async)
+                            tool_result = await fn(parsed_args, mundi_args)
+
+                        except Exception:
+                            tool_result = {
+                                "status": "error",
+                                "error": "Tool execution failed. Please try again or adjust the inputs.",
+                            }
 
                         await add_chat_completion_message(
                             ChatCompletionToolMessageParam(
@@ -1583,62 +1554,6 @@ async def process_chat_interaction_task(
                                         "error": f"Failed to create and apply style: {str(e)}",
                                         "layer_id": layer_id,
                                     }
-
-                            await add_chat_completion_message(
-                                ChatCompletionToolMessageParam(
-                                    role="tool",
-                                    tool_call_id=tool_call.id,
-                                    content=json.dumps(tool_result),
-                                ),
-                            )
-                        elif function_name == "download_from_openstreetmap":
-                            tags = tool_args.get("tags")
-                            bbox = tool_args.get("bbox")
-                            new_layer_name = tool_args.get("new_layer_name")
-
-                            if not all([tags, bbox, new_layer_name]):
-                                tool_result = {
-                                    "status": "error",
-                                    "error": "Missing required parameters for OpenStreetMap download.",
-                                }
-                            else:
-                                try:
-                                    # Keep context manager only around the specific API call
-                                    async with kue_ephemeral_action(
-                                        conversation.id,
-                                        f"Downloading data from OpenStreetMap: {tags}",
-                                    ):
-                                        tool_result = await download_from_openstreetmap(
-                                            map_id=map_id,
-                                            bbox=bbox,
-                                            tags=tags,
-                                            new_layer_name=new_layer_name,
-                                            session=session,
-                                        )
-                                except Exception as e:
-                                    print(traceback.format_exc())
-                                    print(e)
-                                    tool_result = {
-                                        "status": "error",
-                                        "error": f"Error downloading from OpenStreetMap: {str(e)}",
-                                    }
-                            # Add instructions to tool result if download was successful
-                            if tool_result.get(
-                                "status"
-                            ) == "success" and tool_result.get("uploaded_layers"):
-                                uploaded_layers = tool_result.get("uploaded_layers")
-                                layer_names = [
-                                    f"{new_layer_name}_{layer['geometry_type']}"
-                                    for layer in uploaded_layers
-                                ]
-                                layer_ids = [
-                                    layer["layer_id"] for layer in uploaded_layers
-                                ]
-                                tool_result["kue_instructions"] = (
-                                    f"New layers available: {', '.join(layer_names)} "
-                                    f"(IDs: {', '.join(layer_ids)}), all currently invisible. "
-                                    'To make any of these visible to the user on their map, use "add_layer_to_map" with the layer_id and a descriptive new_name.'
-                                )
 
                             await add_chat_completion_message(
                                 ChatCompletionToolMessageParam(
