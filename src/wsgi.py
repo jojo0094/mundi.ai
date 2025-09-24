@@ -135,9 +135,8 @@ async def spa_server(request: Request, exc: StarletteHTTPException):
         or request.url.path.startswith("/mcp")
     ):
         # Return standard 404 response for API routes and MCP routes
-        return JSONResponse(
-            status_code=exc.status_code, content={"detail": str(exc.detail)}
-        )
+        # Preserve structured detail (dict/list) instead of stringifying
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
     # For all other routes, return the SPA's index.html
     return FileResponse("frontendts/dist/index.html")

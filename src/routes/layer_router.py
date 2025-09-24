@@ -607,10 +607,7 @@ async def get_raster_xyz_tile(
                 min_val = metadata["raster_value_stats_b1"]["min"]
                 max_val = metadata["raster_value_stats_b1"]["max"]
 
-                img.rescale(
-                    in_range=((min_val, max_val),),
-                    out_range=((0, 255),)
-                )
+                img.rescale(in_range=((min_val, max_val),), out_range=((0, 255),))
 
                 cm = cmap.get("spectral_r")
                 content = img.render(img_format="PNG", colormap=cm)

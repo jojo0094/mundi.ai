@@ -980,6 +980,17 @@ async def process_chat_interaction_task(
                 if not assistant_message.tool_calls:
                     break
 
+                # Fetch project_id for this map once for all tool calls
+                async with async_conn("tool.project_id_for_map") as proj_conn:
+                    row = await proj_conn.fetchrow(
+                        "SELECT project_id FROM user_mundiai_maps WHERE id = $1",
+                        map_id,
+                    )
+                    assert row is not None
+                    current_project_id: str = row["project_id"]
+
+                # Process each tool call returned by the assistant
+
                 for tool_call in assistant_message.tool_calls:
                     tool_call: ChatCompletionMessageToolCall = tool_call
                     function_name = tool_call.function.name
@@ -1010,6 +1021,7 @@ async def process_chat_interaction_task(
                                 user_uuid=user_id,
                                 conversation_id=conversation.id,
                                 map_id=map_id,
+                                project_id=current_project_id,
                                 session=session,
                             )
                             # Execute tool (all tools are async)
