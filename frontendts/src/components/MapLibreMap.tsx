@@ -15,7 +15,7 @@ import { MapboxOverlay } from '@deck.gl/mapbox';
 import { LASLoader } from '@loaders.gl/las';
 import { Matrix4 } from '@math.gl/core';
 import { bbox } from '@turf/turf';
-import { Activity, Brain, Database, MousePointerClick, Send, X, ZoomIn } from 'lucide-react';
+import { Activity, Brain, Database, MousePointerClick, Send, X, ZoomIn, Maximize2, Minimize2 } from 'lucide-react';
 import {
   AJAXError,
   type IControl,
@@ -237,6 +237,7 @@ export default function MapLibreMap({
     [layerId: string]: JSX.Element;
   }>({});
   const [loadingSourceIds, setLoadingSourceIds] = useState<Set<string>>(new Set());
+  const [assistantExpanded, setAssistantExpanded] = useState(false);
 
   const { data: basemapsData } = useQuery({
     queryKey: ['basemaps', 'available'],
@@ -1243,8 +1244,19 @@ export default function MapLibreMap({
         {/* Message display component - always show parent div, animate height */}
         {(criticalErrors.length > 0 || activeActions.length > 0 || lastAssistantMsg) && (
           <div
-            className={`z-30 absolute bottom-12 mb-[34px] opacity-90 left-3/5 transform -translate-x-1/2 w-4/5 max-w-lg overflow-auto bg-white dark:bg-gray-800 rounded-t-md shadow-md p-2 text-sm transition-all duration-300 max-h-40 h-auto ${errors.length > 0 ? 'border-red-800' : ''}`}
+            className={`z-30 absolute bottom-12 mb-[34px] left-3/5 transform -translate-x-1/2 w-4/5 max-w-lg ${assistantExpanded ? 'max-h-[80vh]' : 'max-h-40'} overflow-auto rounded-t-md shadow-md p-2 text-sm transition-all duration-300 h-auto ${errors.length > 0 ? 'border-red-800' : ''}`}
+            style={{ backgroundColor: 'rgba(30, 41, 57, 0.9)' }}
           >
+            {/* Expand/contract toggle */}
+            {lastAssistantMsg && (
+              <button
+                onClick={() => setAssistantExpanded((v) => !v)}
+                className="absolute right-2 top-2 text-gray-400 hover:text-gray-200 cursor-pointer"
+                title={assistantExpanded ? 'Contract' : 'Expand'}
+              >
+                {assistantExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </button>
+            )}
             {criticalErrors.length > 0 ? (
               <div className="space-y-1 max-h-20">
                 {criticalErrors.map((error) => (
