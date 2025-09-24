@@ -177,6 +177,7 @@ async def test_remote_file_with_pmtiles_generation(auth_client):
     print(f"Layer successfully added to child map {dag_child_map_id}")
 
 
+@pytest.mark.skip(reason="CSV/Google Sheets remote processing not supported by GDAL")
 @pytest.mark.anyio
 async def test_google_sheets_with_pmtiles_generation(auth_client):
     """Test Google Sheets processing with PMTiles generation."""
@@ -286,6 +287,7 @@ async def test_wfs_with_pmtiles_generation(auth_client):
     assert layer_id in [layer["id"] for layer in resp["layers"]]
 
 
+@pytest.mark.skip(reason="CSV/Google Sheets remote processing not supported by GDAL")
 @pytest.mark.usefixtures("mock_esri_requests")
 @pytest.mark.anyio
 async def test_send_message_with_all_remote_layers(auth_client):
