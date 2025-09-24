@@ -15,7 +15,7 @@ import { MapboxOverlay } from '@deck.gl/mapbox';
 import { LASLoader } from '@loaders.gl/las';
 import { Matrix4 } from '@math.gl/core';
 import { bbox } from '@turf/turf';
-import { Activity, Brain, Database, MousePointerClick, Send, X, ZoomIn, Maximize2, Minimize2 } from 'lucide-react';
+import { Activity, Brain, Database, Maximize2, Minimize2, MousePointerClick, Send, X, ZoomIn } from 'lucide-react';
 import {
   AJAXError,
   type IControl,
@@ -61,6 +61,9 @@ const KUE_MESSAGE_STYLE = `
   [&_tbody_tr]:border-b [&_tbody_tr]:border-gray-200 last:[&_tbody_tr]:border-b-0
   [&_td]:align-top
   [&_a]:text-blue-200 [&_a]:underline
+  [&_img]:h-auto [&_img]:block [&_img]:mx-auto
+  [&_img]:my-2 [&_img]:w-[320px] [&_img]:border
+  [&_img]:border-[#aaa] [&_img]:rounded-md
 `;
 
 const SWAP_XY = new Matrix4().set(0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);

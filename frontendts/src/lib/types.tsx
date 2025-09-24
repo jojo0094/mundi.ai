@@ -127,7 +127,7 @@ export interface CodeBlock {
 export interface SanitizedToolCall {
   id: string;
   tagline: string;
-  icon: 'text-search' | 'brush' | 'wrench' | 'map-plus' | 'cloud-download' | 'zoom-in' | 'qgis';
+  icon: 'text-search' | 'brush' | 'wrench' | 'map-plus' | 'cloud-download' | 'zoom-in' | 'qgis' | 'square-terminal';
   code: CodeBlock | null;
   table?: Record<string, string>;
 }

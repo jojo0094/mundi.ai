@@ -176,6 +176,7 @@ class SanitizedToolCall(BaseModel):
         "cloud-download",
         "zoom-in",
         "qgis",
+        "square-terminal",
     ]
     code: CodeBlock | None
     table: dict | None
@@ -194,6 +195,7 @@ TC_ICON_MAP = {
     "add_layer_to_map": "map-plus",
     "zoom_to_bounds": "zoom-in",
     "download_from_openstreetmap": "cloud-download",
+    "execute_shell_in_vm": "square-terminal",
 }
 TC_TAGLINE_MAP = {
     "query_duckdb_sql": "Querying layer in DuckDB...",
@@ -203,6 +205,7 @@ TC_TAGLINE_MAP = {
     "add_layer_to_map": "Adding layer to map...",
     "zoom_to_bounds": "Zooming to bounds...",
     "download_from_openstreetmap": "Downloading from OpenStreetMap...",
+    "execute_shell_in_vm": "Running analysis...",
 }
 
 
