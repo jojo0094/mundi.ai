@@ -103,7 +103,7 @@ function MessageItem({
         key={msgIndex}
         className={`text-halfway-sm-xs ${message.role === 'user' ? 'rounded bg-gray-700 text-right py-0.5 px-2 max-w-3/4 ml-auto' : ''}`}
       >
-        <div className="flex-1 min-w-0 text-white [&_img]:border [&_img]:border-[#aaa] [&_img]:rounded-md [&_img]:my-2 [&_img]:block [&_img]:mx-auto [&_img]:max-w-[360px] [&_img]:h-auto">
+        <div className="flex-1 min-w-0 text-white [&_img]:border [&_img]:border-[#aaa] [&_img]:rounded-md [&_img]:my-2 [&_img]:block [&_img]:mx-auto [&_img]:max-w-[360px] [&_img]:h-auto [&_pre]:max-w-80 [&_pre]:overflow-x-scroll [&_pre]:my-4 [&_pre]:bg-gray-900 [&_pre]:border-gray-500 [&_pre]:border [&_pre]:rounded">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
         </div>
       </div>
