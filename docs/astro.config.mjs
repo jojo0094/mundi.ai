@@ -66,6 +66,7 @@ export default defineConfig({
 									{ label: 'Switching basemaps', slug: 'guides/switching-basemaps-satellite-or-traditional-vector' },
 									{ label: 'Embedding into websites', slug: 'guides/embedding-maps-into-websites' },
 									{ label: 'AI Georeferencer', slug: 'guides/ai-georeferencer-for-aerial-imagery' },
+									{ label: 'Plotting vector data attributes', slug: 'guides/plot-and-chart-from-shapefile-fields' },
 								],
 							},
 							{
