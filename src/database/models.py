@@ -39,6 +39,9 @@ import os
 import tempfile
 import time
 from contextlib import asynccontextmanager
+from boto3.s3.transfer import TransferConfig
+
+one_shot_config = TransferConfig(multipart_threshold=5 * 1024**3)  # 5 GiB
 
 if TYPE_CHECKING:
     pass
@@ -273,7 +276,7 @@ class MapLayer(Base):
                         timestamp = int(time.time())
                         s3_key = f"temp/postgis/{self.layer_id}_{timestamp}.gpkg"
 
-                        await s3_client.upload_file(temp_gpkg_path, bucket_name, s3_key)
+                        await s3_client.upload_file(temp_gpkg_path, bucket_name, s3_key, Config=one_shot_config)
 
                         presigned_url = await s3_client.generate_presigned_url(
                             "get_object",
