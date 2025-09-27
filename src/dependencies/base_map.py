@@ -16,6 +16,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
 import httpx
+import os
 
 
 class BaseMapProvider(ABC):
@@ -44,6 +45,11 @@ class BaseMapProvider(ABC):
     @abstractmethod
     def get_style_display_names(self) -> Dict[str, str]:
         """Return mapping of style names to human-readable display names."""
+        pass
+
+    @abstractmethod
+    def get_default_preview_path(self) -> str:
+        """Return the absolute path to the default preview image for this provider."""
         pass
 
 
@@ -126,6 +132,9 @@ class OpenStreetMapProvider(BaseMapProvider):
     def get_style_display_names(self) -> Dict[str, str]:
         """Return mapping of style names to human-readable display names."""
         return {"openstreetmap": "OpenStreetMap", "openfreemap": "OpenFreeMap"}
+
+    def get_default_preview_path(self) -> str:
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), "osm.webp")
 
 
 # Default dependency - can be overridden in closed source

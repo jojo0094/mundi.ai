@@ -652,6 +652,29 @@ async def get_project_social_preview(
 ):
     latest_map_id = project.maps[-1]
 
+    # If map has no layers, stream the provider's default basemap preview directly
+    async with get_async_db_connection() as conn:
+        map_row = await conn.fetchrow(
+            """
+            SELECT layers
+            FROM user_mundiai_maps
+            WHERE id = $1 AND soft_deleted_at IS NULL
+            """,
+            latest_map_id,
+        )
+
+        layer_ids = (map_row["layers"] or []) if map_row else []
+    if not layer_ids:
+        with open(base_map_provider.get_default_preview_path(), "rb") as f:
+            return Response(
+                content=f.read(),
+                media_type="image/webp",
+                headers={
+                    "Content-Type": "image/webp",
+                    "Cache-Control": "max-age=900, public",
+                },
+            )
+
     # S3 configuration - key by map_id instead of project_id
     bucket_name = get_bucket_name()
     s3_key = f"social_previews/map_{latest_map_id}.webp"
@@ -698,7 +721,6 @@ async def get_project_social_preview(
             )
 
             image_data = webp_buffer.getvalue()
-            print(f"Social image rendering completed for map {latest_map_id}")
 
     return Response(
         content=image_data,
