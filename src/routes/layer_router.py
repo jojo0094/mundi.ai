@@ -110,7 +110,7 @@ async def get_layer_cog_tif(
             if not acquired:
                 raise HTTPException(
                     status_code=423,
-                    detail="COG generation in progress. Try again later.",
+                    detail="COG generation in progress. Please refresh in a moment. This will take 2-3 minutes.",
                 )
             try:
                 row = await conn.fetchrow(
@@ -400,11 +400,11 @@ async def get_layer_pmtiles(
     # Check if metadata has pmtiles_key
     pmtiles_key = layer.metadata_dict.get("pmtiles_key")
 
-    # If PMTiles doesn't exist, create it
+    # If PMTiles doesn't exist, inform client it's still generating (4xx so frontend surfaces it)
     if not pmtiles_key:
         raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="Vector tiles for this layer have not been generated yet",
+            status_code=status.HTTP_423_LOCKED,
+            detail="Vector tiles are still generating. Please refresh in a moment. This will take 2-3 minutes.",
         )
 
     # Get the file size first to handle range requests using async S3
