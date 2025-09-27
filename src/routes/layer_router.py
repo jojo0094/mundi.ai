@@ -266,7 +266,9 @@ async def get_layer_cog_tif(
                         # Upload the COG file to S3
                         cog_key = f"cog/layer/{layer.layer_id}.cog.tif"
                         s3 = await get_async_s3_client()
-                        await s3.upload_file(local_cog_file, bucket_name, cog_key, Config=one_shot_config)
+                        await s3.upload_file(
+                            local_cog_file, bucket_name, cog_key, Config=one_shot_config
+                        )
 
                         # Update the layer metadata with the COG key
                         metadata = layer.metadata_dict or {}

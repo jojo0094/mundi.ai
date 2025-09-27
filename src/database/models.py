@@ -276,7 +276,9 @@ class MapLayer(Base):
                         timestamp = int(time.time())
                         s3_key = f"temp/postgis/{self.layer_id}_{timestamp}.gpkg"
 
-                        await s3_client.upload_file(temp_gpkg_path, bucket_name, s3_key, Config=one_shot_config)
+                        await s3_client.upload_file(
+                            temp_gpkg_path, bucket_name, s3_key, Config=one_shot_config
+                        )
 
                         presigned_url = await s3_client.generate_presigned_url(
                             "get_object",
