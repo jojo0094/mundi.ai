@@ -777,7 +777,7 @@ async def process_chat_interaction_task(
                                     },
                                     "query": {
                                         "type": "string",
-                                        "description": "SQL query to execute against PostGIS database for this layer, should list fetched columns for attributes that might be used for symbology (+ shape geometry). This query MUST alias the geometry column as 'geom'. Include newlines+spaces at ~55 column wrap",
+                                        "description": "SQL query to execute against PostGIS database for this layer, should list fetched columns for attributes that might be used for symbology (+ shape geometry). This query MUST alias the geometry column as 'geom' AND have a unique numeric id aliased as 'id'. Include newlines+spaces at ~55 column wrap",
                                     },
                                     "layer_name": {
                                         "type": "string",
