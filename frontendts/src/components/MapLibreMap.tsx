@@ -793,7 +793,11 @@ export default function MapLibreMap({
           } else if (e.error.status == 500 && e.error.message.indexOf('.mvt') !== -1) {
             // Potentially an error with the query
             const sourceId = 'sourceId' in e && typeof e.sourceId === 'string' ? e.sourceId : undefined;
-            addError('PostGIS query errored while executing, either re-create a new query or email support@buntinglabs.com', true, sourceId);
+            addError(
+              'PostGIS query errored while executing, either re-create a new query or email support@buntinglabs.com',
+              true,
+              sourceId,
+            );
           } else {
             // Unknown type of error?
             addError('Error loading map data: ' + e.error.message, true);
