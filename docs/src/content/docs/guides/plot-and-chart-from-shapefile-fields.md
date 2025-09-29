@@ -7,7 +7,8 @@ Mundi can take vector data (Shapefiles, GeoPackages, etc.) and generate charts f
 the data using AI. This works both for simple relationships between two attributes
 and for complex plots requiring Python analysis using `geopandas` or `numpy`.
 This works [inside any Mundi map](https://app.mundi.ai/) with
-[vector data uploaded](/getting-started/uploading-files/).
+[vector data uploaded](/getting-started/uploading-files/),
+or you can just [create a chart by uploading a Shapefile here](https://app.mundi.ai/tools/generate-chart-from-shapefile).
 
 This allows you to go beyond only using Mundi to explore geographic relationships and
 start exploring non-spatial relationships. You can show relationships between up to
