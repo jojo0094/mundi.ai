@@ -1568,6 +1568,10 @@ async def internal_upload_layer(
                         dataset_layer=sub if isinstance(sub, str) else None,
                     )
 
+                    # Skip empty sublayers entirely
+                    if lr.feature_count is None or lr.feature_count == 0:
+                        continue
+
                     per_md = {
                         **metadata_dict,
                         **lr.metadata.model_dump(exclude_none=True),
@@ -1679,8 +1683,16 @@ async def internal_upload_layer(
         if temp_dir:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+        if not created_layer_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Uploaded vector layer contains no features. "
+                    "Please upload a dataset with at least one feature."
+                ),
+            )
+
         # Return the first created layer for compatibility
-        assert created_layer_ids, "No layers were created"
         return InternalLayerUploadResponse(
             id=created_layer_ids[0],
             name=first_layer_name or (layer_name or file_basename),
@@ -2072,7 +2084,7 @@ async def get_layer_bounds_and_metadata(
 
             with fiona.open(ogr_source, **open_kwargs) as collection:
                 # Get bounds and feature count
-                bounds = list(collection.bounds)
+                bounds = list(collection.bounds) if collection.bounds else None
                 feature_count = len(collection)
                 metadata_updates.feature_count = feature_count
 
