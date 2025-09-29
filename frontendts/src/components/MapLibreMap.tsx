@@ -803,9 +803,22 @@ export default function MapLibreMap({
             addError('Error loading map data: ' + e.error.message, true);
           }
         } else {
-          // Unknown type of error?
+          // Non-AJAXError path: MapLibre often emits plain Error for tile requests.
           const sourceId = 'sourceId' in e && typeof e.sourceId === 'string' ? e.sourceId : undefined;
-          addError('Error loading map data: ' + e.error.message, true, sourceId);
+          const msg = (e as any)?.error?.message as string | undefined;
+          if (typeof msg === 'string') {
+            const match = msg.match(/Bad response code:\s*(\d+)/);
+            const code = match ? parseInt(match[1], 10) : null;
+            if (code === 423) {
+              addError(
+                'Vector tiles are still generating. Please refresh in a moment. This will take 2-3 minutes.',
+                true,
+                sourceId,
+              );
+              return;
+            }
+          }
+          addError('Error loading map data: ' + (msg ?? 'Unknown error'), true, sourceId);
         }
       });
 
